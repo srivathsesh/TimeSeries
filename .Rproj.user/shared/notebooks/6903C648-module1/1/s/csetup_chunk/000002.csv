@@ -1,0 +1,52 @@
+"0","knitr::opts_chunk$set(echo = TRUE)"
+"0","library(magrittr)"
+"0","library(dplyr)"
+"2","
+Attaching package: ‘dplyr’
+
+"
+"2","The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+"
+"2","The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+"
+"0","library(fpp)"
+"2","Loading required package: forecast
+"
+"2","This is forecast 8.2 
+  Stackoverflow is a great place to get help on R issues:
+  http://stackoverflow.com/tags/forecasting+r.
+"
+"2","Loading required package: fma
+"
+"2","Loading required package: expsmooth
+"
+"2","Loading required package: lmtest
+"
+"2","Loading required package: zoo
+"
+"2","
+Attaching package: ‘zoo’
+
+"
+"2","The following objects are masked from ‘package:base’:
+
+    as.Date, as.Date.numeric
+
+"
+"2","Loading required package: tseries
+"
+"2","
+    ‘tseries’ version: 0.10-43
+
+    ‘tseries’ is a package for time series analysis and computational finance.
+
+    See ‘library(help=""tseries"")’ for details.
+
+"
+"0","library(forecast)"

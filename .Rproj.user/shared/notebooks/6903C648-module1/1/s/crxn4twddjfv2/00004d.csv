@@ -1,0 +1,2 @@
+"0","#lines(seasonnaivemethod$mean, col = ""blue"")"
+"0","lines(driftmeth$mean, col = ""green"")"

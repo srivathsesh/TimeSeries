@@ -1,0 +1,35 @@
+---
+title: "Beulah"
+author: "Sri Seshadri"
+date: "4/6/2018"
+output: 
+      html_document:
+        highlight: tango
+---
+
+# Read in data
+
+```{r}
+library(ggplot2)
+rawdata<- read.csv("swm.csv", header = F)
+rawdata$ID <- seq(1:nrow(rawdata))
+
+lambda <- BoxCox.lambda(rawdata$V1)
+swm <- ts(data = BoxCox(rawdata$V1,lambda), start = 2015, frequency = 12)
+plot(swm)
+```
+
+```{r}
+
+holts <- forecast::holt(swm,h=5)
+
+predicted <- data.frame(V1 = InvBoxCox(holts$fitted, lambda), ID = rawdata$ID)
+rawdata.copy <- rbind.data.frame(rawdata,predicted)
+
+rawdata.copy$Category <- c(rep("Actual", 36), rep("predicted", 36))
+
+ggplot(data = rawdata.copy, mapping = aes(x = ID, y = V1, col = Category)) + geom_point()
+
+acf(as.ts(rawdata$V1 - predicted$V1))
+
+```

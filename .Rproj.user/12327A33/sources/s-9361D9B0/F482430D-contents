@@ -1,0 +1,34 @@
+---
+title: "Beulah"
+author: "Sri Seshadri"
+date: "4/6/2018"
+output: 
+      html_document:
+        highlight: tango
+---
+
+# Read in data
+
+```{r}
+library(ggplot2)
+rawdata<- read.csv("swm.csv", header = F)
+rawdata$ID <- seq(1:nrow(rawdata))
+
+swm <- ts(data = rawdata$V1, start = 2015, frequency = 12)
+plot(swm)
+```
+
+```{r}
+
+holts <- forecast::holt(swm[-12],h=5,)
+
+predicted <- data.frame(V1 = holts$fitted, ID = rawdata$ID[-12])
+rawdata.copy <- rbind.data.frame(rawdata[-12,],predicted)
+
+rawdata.copy$Category <- c(rep("Actual", 35), rep("predicted", 35))
+
+ggplot(data = rawdata.copy, mapping = aes(x = ID, y = V1, col = Category)) + geom_point()
+
+hist(holts$residuals)
+
+```

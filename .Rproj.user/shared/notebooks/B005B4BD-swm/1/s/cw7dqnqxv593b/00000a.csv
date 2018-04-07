@@ -1,0 +1,6 @@
+"0","library(ggplot2)"
+"0","rawdata<- read.csv(""swm.csv"", header = F)"
+"0","rawdata$ID <- seq(1:nrow(rawdata))"
+"0","lambda <- BoxCox.lambda(rawdata$V1)"
+"0","swm <- ts(data = BoxCox(rawdata$V1,lambda), start = 2015, frequency = 12)"
+"0","plot(swm)"

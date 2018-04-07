@@ -1,0 +1,2 @@
+"0","seasonalNaive <- snaive(beer2,h=11)"
+"0","plot(seasonalNaive)"

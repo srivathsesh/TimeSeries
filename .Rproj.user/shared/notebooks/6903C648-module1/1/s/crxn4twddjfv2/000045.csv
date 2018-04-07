@@ -1,0 +1,2 @@
+"0","dj2 <- window(dj, end = 250)"
+"0","plot(dj2)"

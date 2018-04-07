@@ -1,0 +1,2 @@
+"0","# the forecast are named means in the output variable"
+"0","plot(meanforecast,PI = F)"
