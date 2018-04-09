@@ -1,5 +1,0 @@
-"0","meanmethod <- forecast::meanf(dj2,h=42)"
-"0","naivemethod <- forecast::naive(dj2,h =42)"
-"0","seasonnaivemethod <- forecast::snaive(dj2,h = 42)"
-"0","driftmeth <- forecast::rwf(dj2, h = 42, drift = T)"
-"0","plot(dj2,xlim=c(0,292))"

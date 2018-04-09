@@ -1,0 +1,170 @@
+---
+title: "Assignment1_Seshadri"
+author: "Sri Seshadri"
+date: "4/7/2018"
+output: 
+  pdf_document:
+    highlight: tango
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+library(magrittr)
+library(dplyr)
+library(fpp)
+library(forecast)
+library(fma)
+```
+
+
+# Section 2.8, Question 2.1  page 59 - Effect of transformation on time series data.
+
+## a) Monthly total of peole on unemployment benefits in Australia (Jan 1956 - July 1992)
+ 
+ Figure 1 shows the time series of number of people in unemplyment benefits in Australia by month. The time series is affected by
+ 
+        *  Population growth over time
+        *  External factors like:
+            * state of the economy
+            * the benefit provided by the government.
+  
+  It would be useful to normalize the data by population, to get the percent unemployed of the total population. Then if need be a transformation on the normalized data can be made.
+  
+  
+```{r, fig.cap="Monthly number of people on unemployment benefits in Australia",fig.height=4}
+data(package = 'fma',dole)
+plot(dole, main = "Total people on unemployment benefits in Australia", ylab = "Number of people")
+```
+
+## b) Monthly total accidental deaths in the United States
+
+The top plot in figure 2 shows the total accidental deaths by month in the US. There is seasonality in the data, where the total accidents peaking at July. The variation in the seasonality may be mitigated by normalizing the totals by dividing by the number of days in the month. 
+
+The middle plot in figure 2 shows the normalized total by days in the months; i.e. Monthly average accidental deaths per day. We see that there is some smoothing of the raw data. While there is not much variation in seasonality, there is interest in further making the size of the seasonal variation equal across seasons. 
+
+The bottom chart of figure 2 shows a box-cox transformation of the average accidental deaths. Its seen that there isn't much affect as expected.
+
+
+```{r,fig.height=6,fig.cap = "Top: Total accidental deaths by month in the US, Middle: Monthly Average Accidental deaths per day, Bottom: Transformed monthly average accidental deaths per day "}
+data("usdeaths")
+par(mfrow = c(3,1))
+plot(usdeaths, type = "b",main = " Monthly accidental deaths", ylab = "")
+grid(nx = NULL, ny = 72/12, col = "lightgray", lty = "dotted",
+     lwd = par("lwd"), equilogs = TRUE)
+plot(usdeaths/monthdays(usdeaths), type = "b",main = "Avg accidental deaths per day", ylab ="")
+grid(nx = NULL, ny = 72/12, col = "lightgray", lty = "dotted",
+     lwd = par("lwd"), equilogs = TRUE)
+usdeaths.lambda <- BoxCox.lambda(usdeaths/monthdays(usdeaths))
+plot(BoxCox(usdeaths/monthdays(usdeaths),usdeaths.lambda), type = "b", main = "Avg accidental deaths per day (Transformed)",cex.lab = 0.4, ylab ="")
+grid(nx = NULL, ny = 72/12, col = "lightgray", lty = "dotted",
+     lwd = par("lwd"), equilogs = TRUE)
+```
+
+## c) Quarterly production of bricks (in millions) at Portland, Australia
+
+The top chart in Figure 3 shows the time series plot of quarterly brick production at Portland Australia. The time series exhibits an increasing trend and seasonality. The variation increases with time / levels. Box-Cox transformation is appropriate for this case. The ideal lambda for the data was 0.255. The bottom chart of figure 3 shows the transformed data. The variation is better across time, of course the huge downward spikes is not fully mitigated.
+
+```{r,fig.height=8, fig.cap= "Top: Quarterly production of bricks (in millions) at Portland, Australia, Bottom : BoxCox transformed Quarterly production of bricks"}
+data("bricksq")
+par(mfrow = c(2,1))
+plot(bricksq,main = "Quarterly production of bricks (in millions) at Portland, Australia",cex.main = 1,ylab ="")
+grid(ny = NULL, nx = 156/4, col = "lightgray", lty = "dotted",
+     lwd = par("lwd"), equilogs = TRUE)
+bricksq.lambda <- BoxCox.lambda(bricksq)
+transformedBricksq <- BoxCox(bricksq,bricksq.lambda)
+plot(transformedBricksq, main = "Transformed Quarterly production of bricks at Portland, Australia",cex.main = 1, ylab ="")
+grid(ny = NULL, nx = 156/4, col = "lightgray", lty = "dotted",
+     lwd = par("lwd"), equilogs = TRUE)
+```
+
+ # Question 2.2 Page 60
+ 
+ ## Time series modeling of Dow Jones index
+ 
+ In this section the Dow jones industrial average is modeled as a time series. The drift method is used to fit the time series and forecasted for the next 10 periods. Figure 4 shows the time series plot with forecast from drift,mean and naive mean methods. Table 1 shows the forecasts from drift method and the blue line in fig 4 plots the forecasts. The drift method forecast is nothing but the extension of the line that joins the first and the last point. The slope of the line is the difference between the last and the first point divided by the number of data points. The grey dashed line in fig 4 shows the fitted drift for the Dow Jones data. 
+ 
+```{r, fig.cap="Time series modeling of Dow Jones industrial average"}
+data("dowjones")
+slope <- (dowjones[78] - dowjones[1])/length(dowjones - 1)
+y <- dowjones[1] + seq(1:78)*slope
+driftmeth <- forecast::rwf(dowjones, h = 10, drift = T)
+meanmethod <- forecast::meanf(dowjones,h=10)
+naivemethod <- forecast::naive(dowjones,h =10)
+seasonnaivemethod <- forecast::snaive(dowjones,h = 10)
+plot(dowjones,xlim = c(1,88), ylab = "index", main = "Dow Jones industrial average")
+lines(driftmeth$mean, col = "blue")
+lines(y,col = "grey",lty =2)
+lines(naivemethod$mean, col = "red")
+lines(meanmethod$mean, col = "grey")
+#lines(seasonnaivemethod$mean, col = "green")
+legend("bottomright", legend = c("Mean method", "Naive method", "Drift method", "first-last point line"), col = c("grey","red","blue", "grey"), lty = c(1,1,1,2), cex = 0.5)
+
+knitr::kable(data.frame(Time = 79:88, index = driftmeth$mean), caption = "Drift method forecast for 10 periods" )
+```
+
+
+### Comparison between models
+
+The drift method is compared with other models like the Mean of the time series, the naive method and the seasonal naive method. The accuracy methods are compared in table 2. Since the time series is set up as a daily closing index. The seasonal forecast for the next point is identical as the previous point (same season as the last point). Hence the Naive and Seasonal Naive forecasts are the same for this scenario. 
+
+The Drift method is the best performing model amongt the competing naive models, based on MAE / MAPE. This is not surprising as we see an increasing trend in the Dow Jones index. The other methods use the mean or the last value of the time series as the forecast. The naive models do not account for the increasing trend. The Drift method does.
+
+```{r}
+Metrics <- rbind.data.frame(Drift = accuracy(driftmeth), Mean = accuracy(meanmethod),Naive = accuracy(naivemethod), SeasonalNaive = accuracy(seasonnaivemethod))
+knitr::kable(round(Metrics,3), caption = "Accuracy metrics of benchmark models")
+```
+
+### Residual Analysis
+
+Figure 5 and 6 shows the residual analysis of the time series model fits. The mean model's residuals show that the means are significantly different from the other models and show it's poor performance.
+
+```{r, fig.cap="Autocorrelation plot of residuals"}
+
+par(mfrow = c(2,2))
+Acf(driftmeth$residuals, main = "Drift Method residuals",cex.main = 0.6)
+Acf(naivemethod$residuals, main = "Naive method residuals", cex.main = 0.5)
+Acf(seasonnaivemethod$residuals, main = "Seasonal Naive residuals",cex.main = 0.5)
+Acf(meanmethod$residuals, main = "Mean method residuals", cex.main = 0.5)
+```
+
+```{r}
+par(mfrow = c(2,2))
+stats::qqnorm(as.numeric(driftmeth$residuals), type = "p",main = "Drift method residuals")
+qqline(as.numeric(driftmeth$residuals), col = "red")
+stats::qqnorm(as.numeric(naivemethod$residuals), type = "p", main = "Naive method residuals")
+qqline(as.numeric(naivemethod$residuals), col = "red")
+stats::qqnorm(as.numeric(seasonnaivemethod$residuals), type = "p", main = "Seasonal Naive method residuals")
+qqline(as.numeric(seasonnaivemethod$residuals), col = "red")
+stats::qqnorm(as.numeric(meanmethod$residuals), type = "p", main = "Mean method residuals")
+qqline(as.numeric(meanmethod$residuals), col = "red")
+```
+ 
+```{r}
+data("ibmclose")
+plot(ibmclose,ylab = "Stock Price", main = "IBM closing stock price")
+hist(ibmclose)
+train <- ts(ibmclose[1:300])
+test <- ts(ibmclose[-1:-300])
+
+plot(train, ylab = "Stock Price", main = "IBM closing stock price \n Training set")
+drift.fit <- rwf(y = train,drift = T,h =1)
+mean.fit <- meanf(train,h = 1)
+naive.fit <- naive(train,h=1)
+train.trans <- BoxCox(train,BoxCox.lambda(train))
+naive.fit.trans <- meanf(train.trans,h=1)
+plot(naive.fit.trans$residuals)
+
+naive.generatedForecasts <- sapply(1:69,function(x) naive(ibmclose[1:300+x-1], h = 1)$mean)
+drift.generatedForecasts <- sapply(1:69,function(x) rwf(ibmclose[1:300+x-1], h = 1,drift = T)$mean)
+```
+ 
+
+
+```{r}
+data("hsales")
+plot(hsales)
+seasonplot(hsales,year.labels = T)
+monthplot(hsales)
+```
+

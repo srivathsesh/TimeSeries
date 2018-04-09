@@ -99,5 +99,21 @@ lines(naivemethod$mean, col = "red")
 #lines(seasonnaivemethod$mean, col = "blue")
 lines(driftmeth$mean, col = "green")
 legend("topright", legend = c("Mean method", "Naive method", "Drift Method"), col = c("grey","red","green"), lty = 1,cex = 0.5)
+
+```
+
+# Rediduals examination
+
+  * The residuals are required to 
+
+# Transformations
+
+Let's look at the elec data set.
+
+```{r}
+data("elec")
+plot(elec)
+plot(decompose(elec,type = "additive"))
+plot(decompose(elec,type = "multiplicative"))
 ```
 

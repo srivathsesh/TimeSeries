@@ -30,6 +30,12 @@ rawdata.copy$Category <- c(rep("Actual", 36), rep("predicted", 36))
 
 ggplot(data = rawdata.copy, mapping = aes(x = ID, y = V1, col = Category)) + geom_point()
 
-hist(rawdata$V1 - predicted$V1)
+acf(as.ts(rawdata$V1 - predicted$V1))
+
+Box.test(as.ts(rawdata$V1 - predicted$V1),lag = 7)
+```
+
+```{r}
 
 ```
+
