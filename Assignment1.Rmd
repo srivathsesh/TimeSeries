@@ -99,6 +99,7 @@ lines(naivemethod$mean, col = "red")
 lines(meanmethod$mean, col = "grey")
 #lines(seasonnaivemethod$mean, col = "green")
 legend("bottomright", legend = c("Mean method", "Naive method", "Drift method", "first-last point line"), col = c("grey","red","blue", "grey"), lty = c(1,1,1,2), cex = 0.5)
+grid(nx = 6)
 
 knitr::kable(data.frame(Time = 79:88, index = driftmeth$mean), caption = "Drift method forecast for 10 periods" )
 ```
@@ -139,24 +140,66 @@ qqline(as.numeric(seasonnaivemethod$residuals), col = "red")
 stats::qqnorm(as.numeric(meanmethod$residuals), type = "p", main = "Mean method residuals")
 qqline(as.numeric(meanmethod$residuals), col = "red")
 ```
- 
-```{r}
-data("ibmclose")
-plot(ibmclose,ylab = "Stock Price", main = "IBM closing stock price")
-hist(ibmclose)
-train <- ts(ibmclose[1:300])
-test <- ts(ibmclose[-1:-300])
 
-plot(train, ylab = "Stock Price", main = "IBM closing stock price \n Training set")
+
+ 
+
+
+ # Question 2.3 IBM Stock prices
+ 
+ Figure 8 shows the time series plot of IBM stock price at close. The data is split into training and test set. The first 300 data points are retained as training set and the rest of the 69 data points are held out as test set. 
+ 
+```{r, fig.cap="IBM Stock price at close"}
+data("ibmclose")
+layout(matrix(c(1,1,2),nrow = 1,ncol =3))
+plot(ibmclose,ylab = "Stock Price", main = "Time series of IBM closing stock price")
+hist(ibmclose,col = "grey")
+train <- ts(ibmclose[1:300])
+test <- ts(ibmclose[-1:-300],start = 301, end = 369)
+```
+
+## Time series modeling of the training set
+
+The Drift, naive and mean method modeling was trained on the training set and the accuracy statistics are shown in table 3. Since the distribution of the data is bimodal, BoxCox transformation was deemed not appropriate. Figure 9 shows the residual analysis.
+Both the naive and the drift methods are very close in their forecasts. 
+
+```{r}
+#plot(train, ylab = "Stock Price", main = "IBM closing stock price \n Training set")
 drift.fit <- rwf(y = train,drift = T,h =1)
+#plot(drift.fit)
 mean.fit <- meanf(train,h = 1)
 naive.fit <- naive(train,h=1)
-train.trans <- BoxCox(train,BoxCox.lambda(train))
-naive.fit.trans <- meanf(train.trans,h=1)
-plot(naive.fit.trans$residuals)
+knitr::kable(rbind.data.frame(Drift = round(accuracy(drift.fit),2),Naive = round(accuracy(naive.fit),2), Mean = round(accuracy(mean.fit),2)),caption = "Forecast Accuracy")
+```
 
-naive.generatedForecasts <- sapply(1:69,function(x) naive(ibmclose[1:300+x-1], h = 1)$mean)
-drift.generatedForecasts <- sapply(1:69,function(x) rwf(ibmclose[1:300+x-1], h = 1,drift = T)$mean)
+```{r, fig.cap="Residual Analysis"}
+par(mar=c(2.5,2.5,1,1))
+layout(matrix(c(1,2,3,4,1,5,3,6),ncol=2),heights = c(1,3,1,3))
+plot.new()
+text(0.5,0.5,"Drift Residuals",cex = 1)
+hist(drift.fit$residuals, xlab = "Drift residuals", main = "")
+plot.new()
+text(0.5,0.5,"Naive Residuals",cex = 1)
+hist(naive.fit$residuals, xlab = "Naive residuals", main ="")
+
+Acf(drift.fit$residuals, main = "")
+Acf(naive.fit$residuals, main = "")
+```
+
+Figure 10 shows the actuals and the forecasts along with the time series of the forecast errors. Both the naive and drift methods are very identical.
+
+```{r}
+
+naive.generatedForecasts <- ts(sapply(1:69,function(x) naive(ibmclose[1:300+x-1], h = 1)$mean),start = 301,end = 369)
+drift.generatedForecasts <- ts(sapply(1:69,function(x) rwf(ibmclose[1:300+x-1], h = 1,drift = TRUE)$mean),start = 301,end = 369)
+layout(matrix(c(1,1,2,3),byrow = T, ncol =2),heights = c(3,2.5))
+plot(ibmclose,col="grey",panel.first = grid(), main = "IBM Closing stock price")
+lines(drift.generatedForecasts,col = "blue",lty=2)
+lines(naive.generatedForecasts, col = "red",lty =3)
+legend("topright", legend = c("Actual", "drift forecast", "naive forecast"),lty = c(1:3), col = c("grey","blue","red"),cex = 0.5)
+plot(test - naive.generatedForecasts,ylab = "Forecast Error", main = "Naive forecast error",col = "grey")
+plot(test - drift.generatedForecasts,ylab = "Forecast Error", main = "Drift forecast error", col ="grey")
+
 ```
  
 
@@ -164,7 +207,12 @@ drift.generatedForecasts <- sapply(1:69,function(x) rwf(ibmclose[1:300+x-1], h =
 ```{r}
 data("hsales")
 plot(hsales)
-seasonplot(hsales,year.labels = T)
+seasonplot(hsales,year.labels = T,col = 1:10)
 monthplot(hsales)
+salesperDay <- hsales/monthdays(hsales)
+lambda <- BoxCox.lambda(salesperDay)
+plot(BoxCox(salesperDay,lambda))
+plot(decompose(BoxCox(salesperDay,lambda),"additive"))
+plot(decompose(BoxCox(salesperDay,lambda),"multiplicative"))
 ```
 
