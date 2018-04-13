@@ -8,8 +8,8 @@ output:
 ---
 
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = F)
+```{r setup, include=F}
+knitr::opts_chunk$set(echo = T)
 library(magrittr)
 library(dplyr)
 library(fpp)
@@ -78,9 +78,9 @@ grid(ny = NULL, nx = 156/4, col = "lightgray", lty = "dotted",
      lwd = par("lwd"), equilogs = TRUE)
 ```
 
- # Question 2.2 Page 60
+# Question 2.2 Page 60
  
- ## Time series modeling of Dow Jones index
+## Time series modeling of Dow Jones index
  
  In this section the Dow jones industrial average is modeled as a time series. The drift method is used to fit the time series and forecasted for the next 10 periods. Figure 4 shows the time series plot with forecast from drift,mean and naive mean methods. Table 1 shows the forecasts from drift method and the blue line in fig 4 plots the forecasts. The drift method forecast is nothing but the extension of the line that joins the first and the last point. The slope of the line is the difference between the last and the first point divided by the number of data points. The grey dashed line in fig 4 shows the fitted drift for the Dow Jones data. 
  
@@ -111,10 +111,13 @@ The drift method is compared with other models like the Mean of the time series,
 
 The Drift method is the best performing model amongt the competing naive models, based on MAE / MAPE. This is not surprising as we see an increasing trend in the Dow Jones index. The other methods use the mean or the last value of the time series as the forecast. The naive models do not account for the increasing trend. The Drift method does.
 
+\pagebreak
+
 ```{r}
 Metrics <- rbind.data.frame(Drift = accuracy(driftmeth), Mean = accuracy(meanmethod),Naive = accuracy(naivemethod), SeasonalNaive = accuracy(seasonnaivemethod))
 knitr::kable(round(Metrics,3), caption = "Accuracy metrics of benchmark models")
 ```
+
 
 ### Residual Analysis
 
@@ -145,7 +148,7 @@ qqline(as.numeric(meanmethod$residuals), col = "red")
  
 
 
- # Question 2.3 IBM Stock prices
+# Question 2.3 IBM Stock prices
  
  Figure 8 shows the time series plot of IBM stock price at close. The data is split into training and test set. The first 300 data points are retained as training set and the rest of the 69 data points are held out as test set. 
  
@@ -188,7 +191,7 @@ Acf(naive.fit$residuals, main = "")
 
 Figure 10 shows the actuals and the forecasts along with the time series of the forecast errors. Both the naive and drift methods are very identical.
 
-```{r}
+```{r,fig.cap="IBM stock price forecast"}
 
 naive.generatedForecasts <- ts(sapply(1:69,function(x) naive(ibmclose[1:300+x-1], h = 1)$mean),start = 301,end = 369)
 drift.generatedForecasts <- ts(sapply(1:69,function(x) rwf(ibmclose[1:300+x-1], h = 1,drift = TRUE)$mean),start = 301,end = 369)
@@ -202,17 +205,117 @@ plot(test - drift.generatedForecasts,ylab = "Forecast Error", main = "Drift fore
 
 ```
  
+# 2.4 Single family house sales in the US
+
+Figure 11 shows the time series plot of home sales in the US. The top right panel shows that there is seasonality in the time series. The bottom left panel shows the variation of sales by month over years. The data is attempted to be smoothed by plotting the sales per day over years.
+
+```{r, fig.cap = "Time series plot of single family home sales in the US"}
+data("hsales")
+par(mfrow = c(2,2))
+plot(hsales)
+mtext("Time series plot of single family home sales in the US",adj = -3,padj = 0.5,cex = 0.8,line = 1)
+
+seasonplot(hsales,year.labels = T,col = 1:10,main = "")
+monthplot(hsales)
+salesperDay <- hsales/monthdays(hsales)
+plot(salesperDay)
+
+
+lambda <- BoxCox.lambda(salesperDay)
+#plot(BoxCox(salesperDay,lambda))
+
+
+# plot(decompose(BoxCox(salesperDay,lambda),"additive"))
+# plot(decompose(BoxCox(salesperDay,lambda),"multiplicative"))
+```
+
+
+## Model training
+
+The time series data is split into training and test set. On the training set the naive, seasonal naive and the drift methods are fit. The drift and Naive models have identical error statistics.
+
+```{r, warning=F}
+training.hsales <- window(hsales,start = 1973, end = 1993-0.01)
+test.hsales <- window(hsales, start = 1994,frequency = 12)
+
+naive.fit2 <- naive(training.hsales,h=1) 
+snaive.fit2 <- snaive(training.hsales,h=1)
+drift.fit2 <- rwf(training.hsales,h = 1, drift = T)
+
+knitr::kable(round(rbind.data.frame(Naive = accuracy(naive.fit2), SeasonalNaive = accuracy(snaive.fit2), Drift = accuracy(drift.fit2) ),2),caption = "Accuracy statistics on training data")
+```
+
+The same methods are fit on the sales normalized by the number of days in a month i.e Sales per day. The accuracy of the training set is seen in the table below. Again the Naive and the drift methods are identical.
+
+```{r}
+
+
+training.salesPerDay <- window(salesperDay, start = 1973,end = 1993-0.01)
+naive.fit3 <- naive(training.salesPerDay,h=10) 
+snaive.fit3 <- snaive(training.salesPerDay)
+drift.fit3 <- rwf(training.salesPerDay,h = 10, drift = T)
+
+knitr::kable(round(rbind.data.frame(Naive = accuracy(naive.fit3),
+Seasonal = accuracy(snaive.fit3),
+Drift = accuracy(drift.fit3)),2),caption = "Accuracy statistics on Sales per data- training data")
+```
+
+The models are fit on a tranformed data set. While transformed data points of values zero make the MAPE; infinite. The MAE and other statistics convey the same message of drift and Naive being equal.
+
+```{r}
+training.salesPerDayTrans <- BoxCox(training.salesPerDay,BoxCox.lambda(training.salesPerDay))
+naive.fit4 <- naive(training.salesPerDayTrans,h=10) 
+snaive.fit4 <- snaive(training.salesPerDayTrans)
+drift.fit4 <- rwf(training.salesPerDayTrans,h = 10, drift = T)
+
+knitr::kable(round(rbind.data.frame(Naive = accuracy(naive.fit4),
+Seasonal = accuracy(snaive.fit4),
+Drift = accuracy(drift.fit4)),2), caption = "Accuracy on Transformed training data")
+```
+
+
+### Test errors
+
+The test errors of Naive is very subtly better than the drift  method as seen from the below tables. Hence Naive method is chosen.
+
+```{r}
+Naive.test.forecast <- ts(sapply(1:23,function(x) naive(hsales[1:240+x-1], h = 1)$mean),start = 1994,frequency = 12)
+Drift.test.forecast <- ts(sapply(1:23,function(x) rwf(hsales[1:240+x-1], h = 1,drift = T)$mean),start = 1994,frequency = 12)
+
+knitr::kable(round(rbind.data.frame(Naive = accuracy(Naive.test.forecast, test.hsales), 
+                                    Drift = accuracy(Drift.test.forecast, test.hsales)),2),
+             caption = "Forecast error on test data")
+```
 
 
 ```{r}
-data("hsales")
-plot(hsales)
-seasonplot(hsales,year.labels = T,col = 1:10)
-monthplot(hsales)
-salesperDay <- hsales/monthdays(hsales)
-lambda <- BoxCox.lambda(salesperDay)
-plot(BoxCox(salesperDay,lambda))
-plot(decompose(BoxCox(salesperDay,lambda),"additive"))
-plot(decompose(BoxCox(salesperDay,lambda),"multiplicative"))
+test.hsalesPerMonth <- test.hsales/monthdays(test.hsales)
+test.hsalesPerMonth.Naive <- ts(sapply(1:23,function(x) naive(hsales/monthdays(hsales)[1:240+x-1], h = 1)$mean),start = 1994,frequency = 12)
+test.hsalesPerMonth.Drift <- ts(sapply(1:23,function(x) rwf(hsales/monthdays(hsales)[1:240+x-1], h = 1,drift = T)$mean),start = 1994,frequency = 12)
+
+knitr::kable(round(rbind.data.frame(Naive = accuracy(test.hsalesPerMonth.Naive,test.hsalesPerMonth), 
+                 Drift = accuracy(test.hsalesPerMonth.Drift,test.hsalesPerMonth)),2),
+             caption = "Forecast error on test data - Sales per day per month")
+
+```
+# Section 4.10 Question 4.1
+
+```{r}
+library(ggplot2)
+ggplot(data = econsumption, mapping = aes(x= temp, y = Mwh)) + geom_point() + geom_smooth(method = "lm")
+lm.fit <- lm(Mwh ~ temp,data = econsumption)
+par(mfrow = c(2,2))
+plot(lm.fit)
+
+forecast(lm.fit,newdata = data.frame(temp = c(10,35)))
+```
+
+```{r}
+data("olympic")
+lmfit.oly <- lm(time ~ Year, data = olympic)
+summary(lmfit.oly)
+ggplot(data = olympic,mapping = aes(x = Year, y = time)) + geom_point() + geom_smooth(method = "lm")
+par(mfrow = c(2,2))
+plot(lmfit.oly)
 ```
 
