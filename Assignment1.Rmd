@@ -300,22 +300,109 @@ knitr::kable(round(rbind.data.frame(Naive = accuracy(test.hsalesPerMonth.Naive,t
 ```
 # Section 4.10 Question 4.1
 
-```{r}
+a)  Figure 12 shows rthe relationship between temperature and electricity consumption. The relationship is negative probabaly because the usage is for heating purposes.
+```{r, fig.cap = "Electricity consumption by temperature"}
 library(ggplot2)
 ggplot(data = econsumption, mapping = aes(x= temp, y = Mwh)) + geom_point() + geom_smooth(method = "lm")
+
+```
+
+b) The model though is statistically significant has an R-Squared of only 59%. Figure 13 shows the residual plots. The residuals are fairly random. Observation 8 has the maximum residual error.
+
+```{r,fig.cap="Residual plots"}
 lm.fit <- lm(Mwh ~ temp,data = econsumption)
+summary(lm.fit)
 par(mfrow = c(2,2))
 plot(lm.fit)
-
+```
+c & d) The forecast for consumption for 10 and 35 degree days and their prediction interval is provided below. The model only explain 59% of the variation in consumption. The predictions need to be used carefully. 
+```{r}
 forecast(lm.fit,newdata = data.frame(temp = c(10,35)))
 ```
 
-```{r}
+# Section 4.10 Question 4.2
+a & b) Figure 14 shows the winning times of 400m dash in olympic finals between 1900 to 2000. There is a decreasing trend over years. 
+```{r,fig.cap="Winning times of 400 meters dash"}
 data("olympic")
+ggplot(data = olympic,mapping = aes(x = Year, y = time)) + geom_point() + geom_smooth(method = "lm")
+
+```
+
+c) The decrease is at the rate of 7.6% 
+d) The residual point shows there is one influential point - observation 1. This point can lead to bias in the model fit. However otherwise the model has a 83% R-Squared.
+e and f) The table below shows the prediction and the actual times. The assumption made in using this model is :
+  * There is no human limitation for running; 
+  * the location of the race does not contribute to performance of the athletes.
+  * The residuals follow a normal distribution.
+
+
+
+```{r}
 lmfit.oly <- lm(time ~ Year, data = olympic)
 summary(lmfit.oly)
-ggplot(data = olympic,mapping = aes(x = Year, y = time)) + geom_point() + geom_smooth(method = "lm")
+
 par(mfrow = c(2,2))
 plot(lmfit.oly)
+knitr::kable(data.frame(Year = seq(2000,2012,length.out = 4),Prediction =  predict(lmfit.oly,newdata = data.frame(Year = seq(2000,2012,length.out = 4))),Actuals = c(43.84,44,43.75,43.94)),caption = "Prediction of run times")
+
+# 2012 - 43.94
+# 2008 - 43.75
+# 2004 - 44
+# 2000 - 43.84
+```
+
+# Section 4.10 Question 3
+
+Elesticity is defined as $(dy/dx)(x/y)$. The Regression model is as follows:
+$$logy = \beta_{0} + log\beta_{1}x + \varepsilon $$
+
+$$ y = e^{\beta_{0} + log\beta_{1}x + \varepsilon} $$
+Differentiating y by x, we get ...
+$$ dy/dx = (e^{\beta_{0} + log\beta_{1}x + \varepsilon}) \frac{\beta_{1}}{x} $$
+
+$$ (\frac{dy}{dx}) (\frac{x}{y}) = (e^{\beta_{0} + log\beta_{1}x + \varepsilon}) (\frac{\beta_{1}}{x}) (\frac{x}{y}) $$
+
+$$ (\frac{dy}{dx}) (\frac{x}{y}) = (y) (\frac{\beta_{1}}{x}) (\frac{x}{y}) $$
+
+$$ (\frac{dy}{dx}) (\frac{x}{y}) = \beta_{1} $$
+
+# Section 6.7 Question 6.1
+
+Prove 3 X 5 MA = weighted 7 MA with (0.067,0.133,0.2,0.2,0.2,0.133,0.067) 
+
+The weights can be converted into fraction (1/15, 2/15, 1/5, 1/5,1/5, 2/15, 1/15)
+
+$$3 X 5MA = \frac{1}{15} [y_{t-3} + y_{t-2} + y_{t-1} + y_{t} + y_{t+1}] + \frac{1}{15}[y_{t-2} + y_{t-1} + y_{t} + y_{t+1} + y_{t+2}] + \frac{1}{15}[y_{t-1} + y_{t} + y_{t+1} + y_{t+2} + y_{t+3}] $$
+
+$$ = \frac{1}{15}y_{t-3} + \frac{2}{15}y_{t-2} + \frac{1}{5}y_{t-1} + \frac{1}{5}y_{t} + \frac{1}{5}y_{t+1} + \frac{2}{15}y_{t+2} + \frac{1}{15}y_{t+3}$$
+The above equation is identical to that of 7 MA with weights (1/15, 2/15, 1/5, 1/5,1/5, 2/15, 1/15)
+
+# Section 6.7 Question 6.2
+
+a) Figure 16 shows the time series of sales of manufacturer A. It has a seasonality of period 1 year and an increasing trend.
+
+
+```{r,fig.cap="Time series plot of sales "}
+data("plastics")
+plot(plastics)
+```
+b & c) The classical multiplicative decomposing supports the interpretation of figure 16. 
+```{r}
+DecomposeMulti <- decompose(plastics, type = "multiplicative")
+plot(DecomposeMulti)
+```
+
+```{r}
+plot(seasadj(DecomposeMulti))
+plastics.rev <- plastics
+plastics.rev[59] <- plastics.rev[59] + 500
+plot(plastics.rev)
+grid(ny = NULL, nx = 61, col = "lightgray", lty = "dotted",
+     lwd = par("lwd"), equilogs = TRUE)
+plot(decompose(plastics.rev, type = "multiplicative"))
+
+plastics.rev2 <- plastics
+plastics.rev2[42] <- plastics.rev[42] + 500
+plot(decompose(plastics.rev2, type = "multiplicative"))
 ```
 
