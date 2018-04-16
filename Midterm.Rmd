@@ -1,0 +1,50 @@
+---
+title: "Midterm"
+author: "Sri Seshadri"
+date: "4/15/2018"
+output: 
+pdf_document:
+  toc: true
+  toc_depth : 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(magrittr)
+library(dplyr)
+library(forecast)
+```
+
+
+# Objective
+
+Predict total sales for every product and store in the next month for the data provided by 1C Company.
+
+# Data
+
+Data was obtained from "https://www.kaggle.com/c/competitive-data-science-predict-future-sales/data"
+
+# Exploratory Data Analysis
+
+```{r}
+# Training data set
+sales_train <- read.csv("./Midterm/sales_train_v2.csv", header = T, stringsAsFactors = F)
+# date in Date format
+sales_train %<>% dplyr::mutate(Date = lubridate::parse_date_time(date,orders = "%d.%m.%Y"),
+                               shop_id = as.factor(shop_id),
+                               item_id = as.factor(item_id),
+                               date_block_num = as.factor(date_block_num),
+                               Month = lubridate::month(Date),
+                               Year = lubridate::year(Date),
+                               Qtr = lubridate::quarter(Date),
+                               ID = seq(1:nrow(.))) %>% 
+                  dplyr::arrange(shop_id,item_id,Date)
+skimr::skim(sales_train)
+
+sales_train %>% dplyr::group_by(shop_id,item_id) %>% dplyr::summarise(Counts = n())
+```
+
+# Observations
+
+ 1. Negative counts
+ 2. 

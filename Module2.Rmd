@@ -73,7 +73,8 @@ legend("topright", legend = c("Actual", "Predicted"), col = c("grey", "blue"),ce
 
 ```{r}
 forecasts <- forecast::forecast(stl.fit)
-plot(forecasts)
+plot(forecasts,PI = F)
+
 ```
 
 
