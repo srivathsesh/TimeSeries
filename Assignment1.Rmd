@@ -2,15 +2,14 @@
 title: "Assignment1_Seshadri"
 author: "Sri Seshadri"
 date: "4/7/2018"
-output:
+output: 
   pdf_document:
-    highlight: tango
-  html_document:
-    df_print: paged
+    toc: true
+    toc_depth: 1
 ---
 
 
-```{r setup, include=F,warning=FALSE,message=F,error=FALSE,fig.show='asis'}
+```{r setup, include=F,warning=FALSE,message=F,error=FALSE,fig.show='asis',tidy.opts=list(width.cutoff=70),tidy=TRUE}
 knitr::opts_chunk$set(echo = F)
 library(magrittr)
 library(dplyr)
@@ -19,6 +18,7 @@ library(forecast)
 library(fma)
 ```
 
+\pagebreak
 
 # Section 2.8, Question 2.1  page 59 - Effect of transformation on time series data.
 
@@ -34,7 +34,7 @@ library(fma)
   It would be useful to normalize the data by population, to get the percent unemployed of the total population. Then if need be a transformation on the normalized data can be made.
   
   
-```{r, fig.cap="Monthly number of people on unemployment benefits in Australia",fig.height=4,fig.pos="h",out.extra=''}
+```{r, fig.cap="Monthly number of people on unemployment benefits in Australia",fig.height=4}
 data(package = 'fma',dole)
 plot(dole, main = "Total people on unemployment benefits in Australia", ylab = "Number of people")
 ```
@@ -49,7 +49,7 @@ The middle plot in figure 2 shows the normalized total by days in the months; i.
 The bottom chart of figure 2 shows a box-cox transformation of the average accidental deaths. Its seen that there isn't much affect as expected.
 
 
-```{r,fig.height=6,fig.cap = "Top: Total accidental deaths by month in the US, Middle: Monthly Average Accidental deaths per day, Bottom: Transformed monthly average accidental deaths per day ",fig.pos="h",out.extra=''}
+```{r,fig.height=6,fig.cap = "Top: Total accidental deaths by month in the US, Middle: Monthly Average Accidental deaths per day, Bottom: Transformed monthly average accidental deaths per day "}
 data("usdeaths")
 par(mfrow = c(3,1))
 plot(usdeaths, type = "b",main = " Monthly accidental deaths", ylab = "")
@@ -68,7 +68,7 @@ grid(nx = NULL, ny = 72/12, col = "lightgray", lty = "dotted",
 
 The top chart in Figure 3 shows the time series plot of quarterly brick production at Portland Australia. The time series exhibits an increasing trend and seasonality. The variation increases with time / levels. Box-Cox transformation is appropriate for this case. The ideal lambda for the data was 0.255. The bottom chart of figure 3 shows the transformed data. The variation is better across time, of course the huge downward spikes is not fully mitigated.
 
-```{r, fig.cap= "Top: Quarterly production of bricks (in millions) at Portland, Australia, Bottom : BoxCox transformed Quarterly production of bricks",out.extra='',fig.height=8}
+```{r, fig.cap= "Top: Quarterly production of bricks (in millions) at Portland, Australia, Bottom : BoxCox transformed Quarterly production of bricks",fig.height=6}
 data("bricksq")
 par(mfrow = c(2,1))
 plot(bricksq,main = "Quarterly production of bricks (in millions) at Portland, Australia",cex.main = 1,ylab ="")
@@ -89,7 +89,7 @@ grid(ny = NULL, nx = 156/4, col = "lightgray", lty = "dotted",
  
  In this section the Dow jones industrial average is modeled as a time series. The drift method is used to fit the time series and forecasted for the next 10 periods. Figure 4 shows the time series plot with forecast from drift,mean and naive mean methods. Table 1 shows the forecasts from drift method and the blue line in fig 4 plots the forecasts. The drift method forecast is nothing but the extension of the line that joins the first and the last point. The slope of the line is the difference between the last and the first point divided by the number of data points. The grey dashed line in fig 4 shows the fitted drift for the Dow Jones data. 
  
-```{r, fig.cap="Time series modeling of Dow Jones industrial average",fig.pos="h",out.extra=''}
+```{r, fig.cap="Time series modeling of Dow Jones industrial average"}
 data("dowjones")
 slope <- (dowjones[78] - dowjones[1])/length(dowjones - 1)
 y <- dowjones[1] + seq(1:78)*slope
@@ -110,6 +110,8 @@ knitr::kable(data.frame(Time = 79:88, index = driftmeth$mean), caption = "Drift 
 ```
 
 
+\pagebreak
+
 ### Comparison between models
 
 The drift method is compared with other models like the Mean of the time series, the naive method and the seasonal naive method. The accuracy methods are compared in table 2. Since the time series is set up as a daily closing index. The seasonal forecast for the next point is identical as the previous point (same season as the last point). Hence the Naive and Seasonal Naive forecasts are the same for this scenario. 
@@ -127,7 +129,7 @@ knitr::kable(round(Metrics,3), caption = "Accuracy metrics of benchmark models")
 
 Figure 5 and 6 shows the residual analysis of the time series model fits. The mean model's residuals show that the means are significantly different from the other models and show it's poor performance.
 
-```{r, fig.cap="Autocorrelation plot of residuals",fig.pos="h",out.extra=''}
+```{r, fig.cap="Autocorrelation plot of residuals"}
 
 par(mfrow = c(2,2))
 Acf(driftmeth$residuals, main = "Drift Method residuals",cex.main = 0.6)
@@ -136,7 +138,7 @@ Acf(seasonnaivemethod$residuals, main = "Seasonal Naive residuals",cex.main = 0.
 Acf(meanmethod$residuals, main = "Mean method residuals", cex.main = 0.5)
 ```
 
-```{r,fig.cap="Residual Analysis",fig.pos="h",out.extra=''}
+```{r,fig.cap="Residual Analysis"}
 par(mfrow = c(2,2))
 stats::qqnorm(as.numeric(driftmeth$residuals), type = "p",main = "Drift method residuals")
 qqline(as.numeric(driftmeth$residuals), col = "red")
@@ -150,12 +152,13 @@ qqline(as.numeric(meanmethod$residuals), col = "red")
 
 
 
+\pagebreak
 
 # Question 2.3 IBM Stock prices
  
  Figure 7 shows the time series plot of IBM stock price at close. The data is split into training and test set. The first 300 data points are retained as training set and the rest of the 69 data points are held out as test set. 
  
-```{r, fig.cap="IBM Stock price at close",fig.pos="h",out.extra=''}
+```{r, fig.cap="IBM Stock price at close"}
 data("ibmclose")
 layout(matrix(c(1,1,2),nrow = 1,ncol =3))
 plot(ibmclose,ylab = "Stock Price", main = "Time series of IBM closing stock price")
@@ -180,7 +183,7 @@ knitr::kable(rbind.data.frame(Drift = round(accuracy(drift.fit),2),Naive = round
 
 
 
-```{r,fig.cap="Residual Analysis",fig.pos="h",out.extra='',fig.height=4}
+```{r,fig.cap="Residual Analysis",fig.height=4}
 par(mar=c(2.5,2.5,1,1))
 layout(matrix(c(1,2,3,4,1,5,3,6),ncol=2),heights = c(1,3,1,3))
 plot.new()
@@ -197,7 +200,7 @@ Acf(naive.fit$residuals, main = "")
 Figure 9 shows the actuals and the forecasts along with the time series of the forecast errors. Both the naive and drift methods are very identical.
 
 
-```{r,fig.cap="IBM stock price forecast",fig.pos="h",out.extra='',fig.height=4}
+```{r,fig.cap="IBM stock price forecast",fig.height=4}
 naive.generatedForecasts <- ts(sapply(1:69,function(x) naive(ibmclose[1:300+x-1], h = 1)$mean),start = 301,end = 369)
 drift.generatedForecasts <- ts(sapply(1:69,function(x) rwf(ibmclose[1:300+x-1], h = 1,drift = TRUE)$mean),start = 301,end = 369)
 layout(matrix(c(1,1,2,3),byrow = T, ncol =2),heights = c(3,2.5))
@@ -209,16 +212,15 @@ plot(test - naive.generatedForecasts,ylab = "Forecast Error", main = "Naive fore
 plot(test - drift.generatedForecasts,ylab = "Forecast Error", main = "Drift forecast error", col ="grey")
 ```
 
-\pagebreak
 
 \pagebreak
- 
+
 # 2.4 Single family house sales in the US
 
 Figure 10 shows the time series plot of home sales in the US. The top right panel shows that there is seasonality in the time series. The bottom left panel shows the variation of sales by month over years. The data is attempted to be smoothed by plotting the sales per day over years.
 
-```{r, fig.cap = "Time series plot of single family home sales in the US",fig.pos="h",out.extra='',fig.show="as.is"}
-data("hsales")
+```{r,fig.cap = "Time series plot of single family home sales in the US"}
+
 par(mfrow = c(2,2))
 plot(hsales)
 mtext("Time series plot of single family home sales in the US",adj = -3,padj = 0.5,cex = 0.8,line = 1)
@@ -228,6 +230,7 @@ salesperDay <- hsales/monthdays(hsales)
 plot(salesperDay)
 lambda <- BoxCox.lambda(salesperDay)
 ```
+
 
 ## Model training
 
@@ -257,7 +260,11 @@ Seasonal = accuracy(snaive.fit3),
 Drift = accuracy(drift.fit3)),2),caption = "Accuracy statistics on Sales per data- training data")
 ```
 
+
+
 The models are fit on a tranformed data set. While transformed data points of values zero make the MAPE; infinite. The MAE and other statistics convey the same message of drift and Naive being equal.
+
+
 
 ```{r}
 training.salesPerDayTrans <- BoxCox(training.salesPerDay,BoxCox.lambda(training.salesPerDay))
@@ -297,19 +304,20 @@ knitr::kable(round(rbind.data.frame(Naive = accuracy(test.hsalesPerMonth.Naive,t
 ```
 
 
+
 # Section 4.10 Question 4.1
 
-a)  Figure 11 shows rthe relationship between temperature and electricity consumption. The relationship is negative probabaly because the usage is for heating purposes.
+## a)  Figure 11 shows rthe relationship between temperature and electricity consumption. The relationship is negative probabaly because the usage is for heating purposes.
 
-```{r, fig.cap = "Electricity consumption by temperature",fig.pos="h",out.extra='',fig.height=3,fig.show="asis"}
+```{r, fig.cap = "Electricity consumption by temperature",fig.show="asis",fig.height=3}
 library(ggplot2)
 ggplot(data = econsumption, mapping = aes(x= temp, y = Mwh)) + geom_point() + geom_smooth(method = "lm") +theme_bw()
 
 ```
 
-b) The model though is statistically significant has an R-Squared of only 59%. Figure 12 shows the residual plots. The residuals are fairly random. Observation 8 has the maximum residual error.
+## b) The model though is statistically significant has an R-Squared of only 59%. Figure 12 shows the residual plots. The residuals are fairly random. Observation 8 has the maximum residual error.
 
-```{r,fig.cap="Residual plots",fig.pos="h",out.extra='',fig.height=4}
+```{r,fig.cap="Residual plots"}
 lm.fit <- lm(Mwh ~ temp,data = econsumption)
 summary(lm.fit)
 par(mfrow = c(2,2))
@@ -317,37 +325,37 @@ plot(lm.fit)
 ```
 
 
-c & d) The forecast for consumption for 10 and 35 degree days and their prediction interval is provided below. The model only explain 59% of the variation in consumption. The predictions need to be used carefully. 
+## c & d) The forecast for consumption for 10 and 35 degree days and their prediction interval is provided below. The model only explain 59% of the variation in consumption. The predictions need to be used carefully. 
 
 
 ```{r}
 forecast(lm.fit,newdata = data.frame(temp = c(10,35)))
 ```
 
-\\pagebreak
+
 
 # Section 4.10 Question 4.2
 
-a & b) Figure 13 shows the winning times of 400m dash in olympic finals between 1900 to 2000. There is a decreasing trend over years.
+## a & b) Figure 13 shows the winning times of 400m dash in olympic finals between 1900 to 2000. There is a decreasing trend over years.
 
 
-```{r,fig.cap="Winning times of 400 meters dash",fig.pos="h",out.extra=''}
+```{r,fig.cap="Winning times of 400 meters dash",fig.height=3}
 data("olympic")
 ggplot(data = olympic,mapping = aes(x = Year, y = time)) + geom_point() + geom_smooth(method = "lm") + theme_bw()
 
 ```
 
 
-c) The decrease is at the rate of 7.6% 
-d) The residual point shows there is one influential point - observation 1. This point can lead to bias in the model fit. However otherwise the model has a 83% R-Squared.
-e and f) The table below shows the prediction and the actual times. The assumption made in using this model is :
+## c) The decrease is at the rate of 7.6% 
+## d) The residual point shows there is one influential point - observation 1. This point can lead to bias in the model fit. However otherwise the model has a 83% R-Squared.
+## e and f) The table below shows the prediction and the actual times. The assumption made in using this model is :
   * There is no human limitation for running; 
   * the location of the race does not contribute to performance of the athletes.
   * The residuals follow a normal distribution.
 
+\pagebreak
 
-
-```{r,fig.cap = "Residual Analysis",fig.pos="h",out.extra='',fig.height=4}
+```{r,fig.cap = "Residual Analysis",fig.height=4}
 lmfit.oly <- lm(time ~ Year, data = olympic)
 summary(lmfit.oly)
 
@@ -356,6 +364,9 @@ plot(lmfit.oly)
 knitr::kable(data.frame(Year = seq(2000,2012,length.out = 4),Prediction =  predict(lmfit.oly,newdata = data.frame(Year = seq(2000,2012,length.out = 4))),Actuals = c(43.84,44,43.75,43.94)),caption = "Prediction of run times")
 
 ```
+
+
+\pagebreak
 
 # Section 4.10 Question 3
 
@@ -372,6 +383,8 @@ $$ (\frac{dy}{dx}) (\frac{x}{y}) = (y) (\frac{\beta_{1}}{x}) (\frac{x}{y}) $$
 
 $$ (\frac{dy}{dx}) (\frac{x}{y}) = \beta_{1} $$
 
+
+
 # Section 6.7 Question 6.1
 
 Prove 3 X 5 MA = weighted 7 MA with (0.067,0.133,0.2,0.2,0.2,0.133,0.067) 
@@ -385,24 +398,24 @@ The above equation is identical to that of 7 MA with weights (1/15, 2/15, 1/5, 1
 
 # Section 6.7 Question 6.2
 
-a) Figure 15 shows the time series of sales of manufacturer A. It has a seasonality of period 1 year and an increasing trend.
+### a) Figure 15 shows the time series of sales of manufacturer A. It has a seasonality of period 1 year and an increasing trend.
 
 
-```{r,fig.cap="Time series plot of sales "}
+```{r,fig.cap="Time series plot of sales ",fig.show="asis"}
 data("plastics")
 plot(plastics)
 ```
 
 
-b & c) The classical multiplicative decomposing supports the interpretation of figure 15.
+### b & c) The classical multiplicative decomposing supports the interpretation of figure 16.
 
-```{r, fig.cap = "Classical multiplicative decomposing"}
+```{r, fig.cap = "Classical multiplicative decomposing",fig.show="asis"}
 DecomposeMulti <- decompose(plastics, type = "multiplicative")
 plot(DecomposeMulti)
 ```
 
 
-d,g and h ) Figure 16 shows the time series plot of the seasonally adjusted data. 
+### d,g and h ) Figure 17 shows the time series plot of the seasonally adjusted data. 
 
 
 ```{r,fig.cap="Seasonally Adj Data"}
@@ -422,16 +435,16 @@ legend("bottomright",legend = c("Actuals","Forecasts"), col = c("grey","blue"),p
 
 ```
 
-f) Figure 18 shows the decomposition when 500 units is added to Nov of year 5. The effect is none, this is because of the classical decomposition that has a disadvantage of losing predictions in the begining and ending of the time series (loss of half year each).
-Figure 19 Shows the decomposition when 500 units is added to June of year 4. This has a slight effect on the predictions and it can be seen in the random error chart as a spike. The moving average smoothes over the spike to minimize its effect. 
+### e, f) Figure 19 shows the decomposition when 500 units is added to Nov of year 5. The effect is none, this is because of the classical decomposition that has a disadvantage of losing predictions in the begining and ending of the time series (loss of half year each).
+Figure 20 Shows the decomposition when 500 units is added to June of year 4. This has a slight effect on the predictions and it can be seen in the random error chart as a spike. The moving average smoothes over the spike to minimize its effect. 
 
-```{r,fig.cap = "Added 500 to december of year 5"}
+```{r,fig.cap = "Added 500 to december of year 5",fig.show="asis"}
 plastics.rev <- plastics
 plastics.rev[59] <- plastics.rev[59] + 500
 plot(decompose(plastics.rev, type = "multiplicative"))
 ```
 
-```{r,fig.cap = "Added 500 to Jun of Year 4"}
+```{r,fig.cap = "Added 500 to Jun of Year 4",fig.show="asis"}
 plastics.rev2 <- plastics
 plastics.rev2[42] <- plastics.rev[42] + 500
 plot(decompose(plastics.rev2, type = "multiplicative"))
@@ -440,6 +453,18 @@ plot(decompose(plastics.rev2, type = "multiplicative"))
 
 # Section 6.7 Question 6.3
 
-a) The trend component is the major source of variation in the data. There is a steady increase (constant rate) for the most part from 1978 to 1995. The seasonal component and the random error each take up only about 8% (16% in total) of the varaition in the data. The month of November and Feb has not changed year over year. The month of March has seen much volatility. Likely because of the recession in 91' & 92'. 
+### a) The trend component is the major source of variation in the data. There is a steady increase (constant rate) for the most part from 1978 to 1995. The seasonal component and the random error each take up only about 8% (16% in total) of the varaition in the data. The month of November and Feb has not changed year over year. The month of March has seen much volatility. Likely because of the recession in 91' & 92'. 
 
-b) the recession is slightly visible in the trend, but not much. However the random error spikes in the negative direction shows that the model did not pick up the recession. 
+### b) the recession is slightly visible in the trend, but not much. However the random error spikes in the negative direction shows that the model did not pick up the recession. 
+
+
+
+
+\pagebreak
+
+
+# Appendix
+
+```{r, ref.label= knitr::all_labels(), echo=TRUE, eval=FALSE, tidy.opts=list(width.cutoff=60),tidy=TRUE}
+
+```

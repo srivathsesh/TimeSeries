@@ -28,7 +28,7 @@ Data was obtained from "https://www.kaggle.com/c/competitive-data-science-predic
 
 ```{r}
 # Training data set
-sales_train <- read.csv("./Midterm/sales_train_v2.csv", header = T, stringsAsFactors = F)
+sales_train <- read.csv.zoo("./Midterm/sales_train_v2.csv", header = T, stringsAsFactors = F)
 # date in Date format
 sales_train %<>% dplyr::mutate(Date = lubridate::parse_date_time(date,orders = "%d.%m.%Y"),
                                shop_id = as.factor(shop_id),
@@ -40,6 +40,8 @@ sales_train %<>% dplyr::mutate(Date = lubridate::parse_date_time(date,orders = "
                                ID = seq(1:nrow(.))) %>% 
                   dplyr::arrange(shop_id,item_id,Date)
 skimr::skim(sales_train)
+Ref <- data.frame(Date = seq(min(sales_train$Date), max(sales_train$Date),by = "day"))
+test <- merge(Ref,sales_train,all.x = T)
 
 sales_train %>% dplyr::group_by(shop_id,item_id) %>% dplyr::summarise(Counts = n())
 ```
@@ -48,3 +50,5 @@ sales_train %>% dplyr::group_by(shop_id,item_id) %>% dplyr::summarise(Counts = n
 
  1. Negative counts
  2. 
+ 
+ Look up quantmod and xts package.
