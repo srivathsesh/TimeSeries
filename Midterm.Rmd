@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(magrittr)
 library(dplyr)
 library(forecast)
+library(zoo)
 ```
 
 
@@ -28,22 +29,77 @@ Data was obtained from "https://www.kaggle.com/c/competitive-data-science-predic
 
 ```{r}
 # Training data set
-sales_train <- read.csv.zoo("./Midterm/sales_train_v2.csv", header = T, stringsAsFactors = F)
-# date in Date format
-sales_train %<>% dplyr::mutate(Date = lubridate::parse_date_time(date,orders = "%d.%m.%Y"),
-                               shop_id = as.factor(shop_id),
-                               item_id = as.factor(item_id),
-                               date_block_num = as.factor(date_block_num),
-                               Month = lubridate::month(Date),
-                               Year = lubridate::year(Date),
-                               Qtr = lubridate::quarter(Date),
-                               ID = seq(1:nrow(.))) %>% 
-                  dplyr::arrange(shop_id,item_id,Date)
-skimr::skim(sales_train)
-Ref <- data.frame(Date = seq(min(sales_train$Date), max(sales_train$Date),by = "day"))
-test <- merge(Ref,sales_train,all.x = T)
+sales_train <- read.csv("./Midterm/sales_train_v2.csv", header = T, stringsAsFactors = F)
+# Item categories
+ItemCategories <- read.csv("./Midterm/item_categories.csv")
+# Items
+Items <- read.csv('./Midterm/items.csv')
 
-sales_train %>% dplyr::group_by(shop_id,item_id) %>% dplyr::summarise(Counts = n())
+# Aggregated data 
+Agg_sales_train <- sales_train %>% 
+                 dplyr::mutate(date = lubridate::parse_date_time(date,orders = "%d.%m.%Y")) %>% 
+                 dplyr::group_by(item_id,shop_id,date_block_num) %>% 
+                 dplyr::summarise(MonthlyCts = sum(item_cnt_day),Price = mean(item_price,na.rm = T)) %>% 
+                 dplyr::arrange(item_id,shop_id,date_block_num) %>% 
+                 dplyr::mutate(Item.Shop = item_id + shop_id / 100) %>% 
+                 dplyr::left_join(x = ., y = Items[,2:3])
+# Reference frame
+df <- data.frame(date_block_num = rep(seq(min(Agg_sales_train$date_block_num),max(Agg_sales_train$date_block_num)),n_distinct(Agg_sales_train$Item.Shop)),
+                 Item.Shop = rep(unique(Agg_sales_train$Item.Shop),each = max(Agg_sales_train$date_block_num) - min(Agg_sales_train$date_block_num) + 1)
+                 ) %>%
+  tidyr::separate(.,2, c("item_id","shop_id"))%>%
+        dplyr::mutate(shop_id = ifelse(is.na(shop_id),0,shop_id)) %>% 
+        dplyr::mutate(item_id = as.numeric(item_id),shop_id = as.numeric(shop_id))
+# Monthly sales reference data frame includes shop id
+MonthlySales.ItemShop <- df %>% 
+        dplyr::left_join(.,Agg_sales_train[1:5]) %>% 
+        dplyr::left_join(.,Items[2:3])
+
+MonthlySales.Train <- MonthlySales.ItemShop %>% 
+        dplyr::mutate(ItemShop = item_id + shop_id/100) %>% 
+        dplyr::select(date_block_num,ItemShop,MonthlyCts) %>% 
+        #dplyr::mutate(MonthlyCts = ifelse(is.na(MonthlyCts),0,MonthlyCts)) %>% 
+        dplyr::group_by(ItemShop,date_block_num) %>% 
+        dplyr::summarise(Sales = sum(MonthlyCts,na.rm = T)) %>% 
+        tidyr::spread(ItemShop,Sales)
+# There are several variables that have very little data , what are they
+NearZeroVars <- caret::nearZeroVar(MonthlySales.Train, names = F)
+MonthlySalests <- as.ts(MonthlySales.Train[,c(1,NearZeroVars)*-1],frequency = 1, start = 0, end = 33)
+# Summay by Item Category
+MonthlySalebyCategory  <- MonthlySales.ItemShop %>% dplyr::group_by(date_block_num,item_category_id) %>% 
+  dplyr::summarise(SaleCounts = sum(MonthlyCts,na.rm = T)) %>% 
+  tidyr::spread(item_category_id, SaleCounts)
+# How are categories related?
+
+# remove categories that have zero variance
+ZeroVars <- caret::nearZeroVar(MonthlySalebyCategory)
+cormat <- cor(MonthlySalebyCategory[c(1,ZeroVars)*-1])
+corrplot::corrplot(cormat,order = "hclust",tl.cex = 0.6)
+
+RetrieveItemStores <- function(data = MonthlySales.ItemShop, category) {
+  data %>% 
+    filter(item_category_id %in% category) %>%
+    #dplyr::distinct(item_id,shop_id,item_category_id) %>% 
+    dplyr::group_by(item_id,shop_id,item_category_id) %>% 
+    dplyr::summarise(Datapoints = sum(!is.na(MonthlyCts))/nrow(.)) %>% 
+    #dplyr::distinct(item_id,shop_id,keep.all = T) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::mutate(Item.Shop = item_id + shop_id/100) %>% 
+    dplyr::select(Item.Shop,item_category_id,Datapoints) %>% 
+    dplyr::filter(Item.Shop %in% as.numeric(colnames(!!MonthlySales.Train)[NearZeroVars*-1])) %>% 
+    dplyr::arrange(item_category_id,desc(Datapoints)) %>% 
+    dplyr::mutate(item_id = floor(Item.Shop), shop_id = (Item.Shop - item_id)*100)
+}
+
+
+```
+
+```{r}
+library(reshape2)
+HighCors <- subset(melt(cormat,varnames = c('CatA', 'CatB'), value.name = 'Correlations'), Correlations >= 0.8 & Correlations < 1)
+
+HighCors[which(HighCors$CatA == 5),] %>% distinct(CatB)
+testdf <- RetrieveItemStores(category = 19)
 ```
 
 # Observations
