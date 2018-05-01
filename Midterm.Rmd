@@ -14,6 +14,7 @@ library(magrittr)
 library(dplyr)
 library(forecast)
 library(zoo)
+library(ggplot2)
 ```
 
 
@@ -57,11 +58,13 @@ MonthlySales.ItemShop <- df %>%
 
 MonthlySales.Train <- MonthlySales.ItemShop %>% 
         dplyr::mutate(ItemShop = item_id + shop_id/100) %>% 
-        dplyr::select(date_block_num,ItemShop,MonthlyCts) %>% 
+        dplyr::select(date_block_num,ItemShop,MonthlyCts, Price) %>% 
         #dplyr::mutate(MonthlyCts = ifelse(is.na(MonthlyCts),0,MonthlyCts)) %>% 
         dplyr::group_by(ItemShop,date_block_num) %>% 
         dplyr::summarise(Sales = sum(MonthlyCts,na.rm = T)) %>% 
         tidyr::spread(ItemShop,Sales)
+
+
 # There are several variables that have very little data , what are they
 NearZeroVars <- caret::nearZeroVar(MonthlySales.Train, names = F)
 MonthlySalests <- as.ts(MonthlySales.Train[,c(1,NearZeroVars)*-1],frequency = 1, start = 0, end = 33)
@@ -71,10 +74,9 @@ MonthlySalebyCategory  <- MonthlySales.ItemShop %>% dplyr::group_by(date_block_n
   tidyr::spread(item_category_id, SaleCounts)
 # How are categories related?
 
-# remove categories that have zero variance
+## remove categories that have zero variance
 ZeroVars <- caret::nearZeroVar(MonthlySalebyCategory)
 cormat <- cor(MonthlySalebyCategory[c(1,ZeroVars)*-1])
-corrplot::corrplot(cormat,order = "hclust",tl.cex = 0.6)
 
 RetrieveItemStores <- function(data = MonthlySales.ItemShop, category) {
   data %>% 
@@ -88,23 +90,97 @@ RetrieveItemStores <- function(data = MonthlySales.ItemShop, category) {
     dplyr::select(Item.Shop,item_category_id,Datapoints) %>% 
     dplyr::filter(Item.Shop %in% as.numeric(colnames(!!MonthlySales.Train)[NearZeroVars*-1])) %>% 
     dplyr::arrange(item_category_id,desc(Datapoints)) %>% 
-    dplyr::mutate(item_id = floor(Item.Shop), shop_id = (Item.Shop - item_id)*100)
+    dplyr::mutate(item_id = as.integer(floor(Item.Shop)), shop_id = as.integer((Item.Shop - item_id)*100))
 }
 
 
 ```
 
+## Data exploration by item category
+
+In this section we'll explore the correlation amongst item categories at a higher level
+
 ```{r}
+# Correlation plot 
+corrplot::corrplot(cormat,order = "hclust",tl.cex = 0.6)
 library(reshape2)
 HighCors <- subset(melt(cormat,varnames = c('CatA', 'CatB'), value.name = 'Correlations'), Correlations >= 0.8 & Correlations < 1)
 
-HighCors[which(HighCors$CatA == 5),] %>% distinct(CatB)
-testdf <- RetrieveItemStores(category = 19)
+HighCors[which(HighCors$CatA == 83),] %>% distinct(CatB)
+testdf <- RetrieveItemStores(category = 2) %>% distinct(item_id)
+
+
 ```
 
-# Observations
+## Gaming consoles, accessories and games.
 
- 1. Negative counts
- 2. 
- 
- Look up quantmod and xts package.
+```{r}
+MonthlySalebyCategory %>% 
+  dplyr::ungroup() %>% 
+  dplyr::select(`2`,`19`) %>% ggplot(mapping = aes(x = `19`, y = `2`)) + geom_point() + stat_smooth(method = "lm") + xlab("Games PS3") + ylab("Accesories PS3") + theme_bw()
+
+MonthlySalebyCategory %>% 
+  dplyr::ungroup() %>% 
+  dplyr::select(`2`,`11`) %>% ggplot(mapping = aes(x = `11`, y = `2`)) + geom_point() + stat_smooth(method = "lm") + xlab("Games Consoles PS3") + ylab("Accesories PS3") + theme_bw()
+
+MonthlySalebyCategory %>% 
+  dplyr::ungroup() %>% 
+  dplyr::select(`5`,`11`) %>% ggplot(mapping = aes(x = `11`, y = `5`)) + geom_point() + stat_smooth(method = "lm") + xlab("Games Consoles PS3") + ylab("PS Vita") + theme_bw()
+
+
+```
+
+### Do the linear relationship hold true across shops
+
+The 
+
+```{r}
+# Data set up
+
+Categoriesofinterest <- c(2,5,11,19,32,37:40,55:60,62)
+Agg_Sales_Category <- Agg_sales_train %>% dplyr::ungroup() %>% 
+  dplyr::mutate(shop_id = as.factor(shop_id)) %>% 
+  dplyr::filter(item_category_id %in% !!Categoriesofinterest) %>%
+  dplyr::group_by(shop_id,item_category_id,date_block_num) %>% 
+  dplyr::summarise(Sale = sum(MonthlyCts,na.rm = T)) %>% 
+  tidyr::spread(item_category_id,Sale) 
+
+Agg_Price_Category <- Agg_sales_train %>% 
+   dplyr::ungroup() %>% 
+  dplyr::mutate(shop_id = as.factor(shop_id)) %>% 
+  dplyr::filter(item_category_id %in% !!Categoriesofinterest) %>%
+  dplyr::group_by(shop_id,item_category_id,date_block_num) %>% 
+  dplyr::summarise(Price = mean(Price,na.rm = T)) %>% 
+  tidyr::spread(item_category_id,Price)
+
+colnames(Agg_Price_Category)[3:(2+length(Categoriesofinterest))] <- paste0("Price",Categoriesofinterest)
+Agg_Sales_Category %<>% dplyr::left_join(.,Agg_Price_Category)
+# Plotting 
+Agg_Sales_Category %>% ggplot(mapping = aes(x = `19`, y = `2`,col = shop_id)) + geom_point() + stat_smooth(method = "lm",se = F) + xlab("Games PS3") + ylab("Accesories PS3") + theme_bw() + theme(legend.position = "none") + ggtitle( "PS3 Game sales Vs PS3 Accessories", subtitle = "Colored by shop_id")
+  
+```
+
+# Linear model for PS3 Accesories sale
+
+```{r}
+fit.PS3Acc <- lm(`2` ~  `19` + `62` +  Price19 + Price2 + Price62 + shop_id, data = Agg_Sales_Category)
+summary(fit.PS3Acc)
+broom::augment(fit.PS3Acc) %>% lattice::xyplot(.fitted ~ X2, data = .,xlab = "Accesories PS3 sales", ylab = "Fitted PS3 Accesories sale")
+
+```
+
+## Top Down approach from here?
+
+```{r}
+Agg_Sales_Category %>% ggplot(mapping = aes(x = `37`, y = `55`,col = shop_id)) + geom_point() + stat_smooth(method = "lm",se = F) + xlab("Cinema Blue Ray") + ylab("Music CD Local") + theme_bw() + theme(legend.position = "none") + ggtitle( "Cinema Blue Ray Vs Music CD local sales", subtitle = "Colored by shop_id")
+
+
+```
+
+
+```{r}
+fit <- lm(`55` ~  `37`  +  Price55 + Price37 , data = Agg_Sales_Category)
+summary(fit)
+plot(fit)
+```
+
