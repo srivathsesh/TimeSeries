@@ -1,0 +1,211 @@
+---
+title: "Midterm Discussion Week 5"
+author: "Sri Seshadri"
+date: "5/1/2018"
+output:
+  slidy_presentation: default
+  ioslides_presentation: default
+---
+
+```{r setup, include=FALSE,message=F,warning=F}
+knitr::opts_chunk$set(echo = FALSE)
+library(magrittr)
+library(dplyr)
+library(forecast)
+library(zoo)
+library(ggplot2)
+```
+
+## Objective
+
+Predict total sales for every product and store in the next month for the data provided by 1C Company.
+
+### Data
+
+Data was obtained from "https://www.kaggle.com/c/competitive-data-science-predict-future-sales/data"
+
+
+## Data set up
+
+The datasets is in the long form and needs arranging in the wide form for cross sectional analysis.
+
+```{r, echo = TRUE,eval = T,tidy=T,tidy.opts=list(width.cutoff=70)}
+
+# Training data set
+sales_train <- read.csv("./Midterm/sales_train_v2.csv", header = T, stringsAsFactors = F)
+# Item categories
+ItemCategories <- read.csv("./Midterm/item_categories.csv")
+# Items
+Items <- read.csv('./Midterm/items.csv')
+
+# Aggregated data 
+Agg_sales_train <- sales_train %>% 
+                 dplyr::mutate(date = lubridate::parse_date_time(date,orders = "%d.%m.%Y")) %>% 
+                 dplyr::group_by(item_id,shop_id,date_block_num) %>% 
+                 dplyr::summarise(MonthlyCts = sum(item_cnt_day),Price = mean(item_price,na.rm = T)) %>% 
+                 dplyr::arrange(item_id,shop_id,date_block_num) %>% 
+                 dplyr::mutate(Item.Shop = item_id + shop_id / 100) %>% 
+                 dplyr::left_join(x = ., y = Items[,2:3])
+# Reference frame
+df <-
+  data.frame(
+  date_block_num = rep(seq(
+  min(Agg_sales_train$date_block_num),
+  max(Agg_sales_train$date_block_num)
+  ), n_distinct(Agg_sales_train$Item.Shop)),
+  Item.Shop = rep(
+  unique(Agg_sales_train$Item.Shop),
+  each = max(Agg_sales_train$date_block_num) - min(Agg_sales_train$date_block_num) + 1
+  )
+  ) %>%
+  tidyr::separate(., 2, c("item_id", "shop_id")) %>%
+  dplyr::mutate(shop_id = ifelse(is.na(shop_id), 0, shop_id)) %>%
+  dplyr::mutate(item_id = as.numeric(item_id), shop_id = as.numeric(shop_id))
+# Monthly sales reference data frame includes shop id
+MonthlySales.ItemShop <- df %>% 
+        dplyr::left_join(.,Agg_sales_train[1:5]) %>% 
+        dplyr::left_join(.,Items[2:3])
+
+MonthlySales.Train <- MonthlySales.ItemShop %>% 
+        dplyr::mutate(ItemShop = item_id + shop_id/100) %>% 
+        dplyr::select(date_block_num,ItemShop,MonthlyCts, Price) %>% 
+        #dplyr::mutate(MonthlyCts = ifelse(is.na(MonthlyCts),0,MonthlyCts)) %>% 
+        dplyr::group_by(ItemShop,date_block_num) %>% 
+        dplyr::summarise(Sales = sum(MonthlyCts,na.rm = T)) %>% 
+        tidyr::spread(ItemShop,Sales)
+
+
+# There are several variables that have very little data;what are they?
+NearZeroVars <- caret::nearZeroVar(MonthlySales.Train, names = F)
+
+# Conversion into time series object
+MonthlySalests <- as.ts(MonthlySales.Train[,c(1,NearZeroVars)*-1],frequency = 1, start = 0, end = 33)
+
+# Summay by Item Category
+MonthlySalebyCategory  <-
+  MonthlySales.ItemShop %>% dplyr::group_by(date_block_num, item_category_id) %>%
+  dplyr::summarise(SaleCounts = sum(MonthlyCts, na.rm = T)) %>%
+  tidyr::spread(item_category_id, SaleCounts)
+
+# remove categories that have zero variance
+ZeroVars <- caret::nearZeroVar(MonthlySalebyCategory)
+
+# How are categories related? Correlation Matrix
+cormat <- cor(MonthlySalebyCategory[c(1,ZeroVars)*-1])
+
+# Utility function to retrieve item_id for any given vector of item_category_id
+
+RetrieveItemStores <- function(data = MonthlySales.ItemShop, category) {
+  data %>% 
+    filter(item_category_id %in% category) %>%
+    dplyr::group_by(item_id,shop_id,item_category_id) %>% 
+    dplyr::summarise(Datapoints = sum(!is.na(MonthlyCts))/nrow(.)) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::mutate(Item.Shop = item_id + shop_id/100) %>% 
+    dplyr::select(Item.Shop,item_category_id,Datapoints) %>% 
+    dplyr::filter(Item.Shop %in% as.numeric(colnames(!!MonthlySales.Train)[NearZeroVars*-1])) %>% 
+    dplyr::arrange(item_category_id,desc(Datapoints)) %>% 
+    dplyr::mutate(item_id = as.integer(floor(Item.Shop)), shop_id = as.integer((Item.Shop - item_id)*100))
+}
+
+```
+
+## Correlation amongst item categories
+
+```{r}
+corrplot::corrplot(cormat,order = "hclust",tl.cex = 0.6)
+library(reshape2)
+HighCors <- subset(melt(cormat,varnames = c('CatA', 'CatB'), value.name = 'Correlations'), Correlations >= 0.8 & Correlations < 1)
+```
+
+## Linear relationships
+
+```{r}
+MonthlySalebyCategory %>% 
+  dplyr::ungroup() %>% 
+  dplyr::select(`2`,`19`) %>% ggplot(mapping = aes(x = `19`, y = `2`)) + geom_point() + stat_smooth(method = "lm") + xlab("Games PS3") + ylab("Accesories PS3") + theme_bw()
+
+```
+
+
+## Linear relationships - 2
+
+```{r}
+MonthlySalebyCategory %>% 
+  dplyr::ungroup() %>% 
+  dplyr::select(`2`,`11`) %>% ggplot(mapping = aes(x = `11`, y = `2`)) + geom_point() + stat_smooth(method = "lm") + xlab("Games Consoles PS3") + ylab("Accesories PS3") + theme_bw()
+```
+
+
+## Linear relationships - 3
+
+```{r}
+MonthlySalebyCategory %>% 
+  dplyr::ungroup() %>% 
+  dplyr::select(`5`,`11`) %>% ggplot(mapping = aes(x = `11`, y = `5`)) + geom_point() + stat_smooth(method = "lm") + xlab("Games Consoles PS3") + ylab("PS Vita") + theme_bw()
+```
+
+
+## Do these relationships hold across shops?
+
+```{r}
+# Data set up
+
+Categoriesofinterest <- c(2,5,11,19,32,37:40,55:60,62)
+Agg_Sales_Category <- Agg_sales_train %>% dplyr::ungroup() %>% 
+  dplyr::mutate(shop_id = as.factor(shop_id)) %>% 
+  dplyr::filter(item_category_id %in% !!Categoriesofinterest) %>%
+  dplyr::group_by(shop_id,item_category_id,date_block_num) %>% 
+  dplyr::summarise(Sale = sum(MonthlyCts,na.rm = T)) %>% 
+  tidyr::spread(item_category_id,Sale) 
+
+Agg_Price_Category <- Agg_sales_train %>% 
+   dplyr::ungroup() %>% 
+  dplyr::mutate(shop_id = as.factor(shop_id)) %>% 
+  dplyr::filter(item_category_id %in% !!Categoriesofinterest) %>%
+  dplyr::group_by(shop_id,item_category_id,date_block_num) %>% 
+  dplyr::summarise(Price = mean(Price,na.rm = T)) %>% 
+  tidyr::spread(item_category_id,Price)
+
+colnames(Agg_Price_Category)[3:(2+length(Categoriesofinterest))] <- paste0("Price",Categoriesofinterest)
+Agg_Sales_Category %<>% dplyr::left_join(.,Agg_Price_Category)
+# Plotting 
+Agg_Sales_Category %>% ggplot(mapping = aes(x = `19`, y = `2`,col = shop_id)) + geom_point() + stat_smooth(method = "lm",se = F) + xlab("Games PS3") + ylab("Accesories PS3") + theme_bw() + theme(legend.position = "none") + ggtitle( "PS3 Game sales Vs PS3 Accessories", subtitle = "Colored by shop_id")
+```
+
+
+## Linear model for PS3 Accesories sale
+
+```{r}
+fit.PS3Acc <- lm(`2` ~  `19` + `62` +  Price19 + Price2 + Price62 + shop_id, data = Agg_Sales_Category)
+#summary(fit.PS3Acc)
+broom::augment(fit.PS3Acc) %>% lattice::xyplot(.fitted ~ X2, data = .,xlab = "Accesories PS3 sales", ylab = "Fitted PS3 Accesories sale")
+
+```
+
+## Cinema (Movies) DVD Vs Music CD sales
+
+```{r}
+Agg_Sales_Category %>% ggplot(mapping = aes(x = `37`, y = `55`,col = shop_id)) + geom_point() + stat_smooth(method = "lm",se = F) + xlab("Cinema Blue Ray") + ylab("Music CD Local") + theme_bw() + theme(legend.position = "none") + ggtitle( "Cinema Blue Ray Vs Music CD local sales", subtitle = "Colored by shop_id")
+
+```
+
+## Model for Cinema Blue Ray DVD Sales
+
+```{r}
+fit <- lm(`55` ~  `37`  +  Price55 + Price37 + shop_id , data = Agg_Sales_Category)
+#summary(fit)
+broom::augment(fit) %>% lattice::xyplot(.fitted ~ X55, data = .,xlab = "Cinema Blue Ray Sales", ylab = "Fitted Blue Ray sales")
+```
+
+## Now what ??
+
+- Challenge is to find if the categorical relationship holds good at item level?
+  + Setting up the data in a wide format at the item level is tedious, other ways?
+    + Feature selection
+    
+- Time series modeling
+  + ARIMA with xreg
+  + Cross correlation functions
+
+## Wish me luck
