@@ -1,0 +1,449 @@
+---
+title: "Assignment 2"
+author: "Sri Seshadri"
+date: "5/4/2018"
+output: 
+  pdf_document:
+    toc: true
+    toc_depth: 1
+---
+
+```{r setup, include=F,warning=FALSE,message=F,error=FALSE,fig.show='asis',tidy.opts=list(width.cutoff=70),tidy=TRUE}
+knitr::opts_chunk$set(echo = F)
+library(magrittr)
+library(dplyr)
+library(fpp)
+library(forecast)
+library(fma)
+library(ggplot2)
+library(sweep)
+```
+
+# Section 7/8 Question 7.1
+
+## a) Figure 1 shows the timeseries of the books data. The paperback series have  change in levels more so than a trend. The hardcover series have a subtle upward trend. The saw tooth pattern in data shows seasonality, but with varying levels of peaks. 
+
+```{r, fig.cap="Time series of books", fig.height=3, fig.pos="asis"}
+data("books")
+autoplot(books,facet = T) + theme_bw() + geom_smooth(se = F)
+```
+
+## b, c,d and e.
+
+Figure 2 shows the effect of alpha on the SSE (in sample). In the Paperback and Hardcover data when the intial values are set to "simple" we see that as the alpha increases the SSE decreases, that is the forecasts are closer to the actuals. However when the intial values are set to optimal, it is seen that in the Paperback data, the SSE decreases and then increases with increase in alpha.
+
+The optimal alpha value is shown in Figure 2 as a triangle. When the initial values are obtained optimally and the alpha is selected optimally, then minimal SSE is obtained at relatively smaller values of alpha. 
+
+
+
+```{r,warning=F, fig.cap="SSE vs alpha by simple and optimal initial values"}
+sesstats <- function(alpha,initial,name){
+  data <- books
+  fit <- ses(data[,name],alpha = alpha, initial = initial)
+  stats <- data.frame(dataset = name,
+                      initial = initial,
+                      alpha = alpha,
+                      SSE = (accuracy(fit)[2])^2*length(data[,name])
+                      )
+}
+
+
+arggrid <- tibble(alpha = rep(seq(0.1,0.2,by= 0.02),4),
+                      initial = rep(rep(c("simple","optimal"),each = 6),2),
+                      name = rep(c("Paperback", "Hardcover"),each = 12)
+                      )
+SSE_Results <- purrr::pmap_df(arggrid,.f = sesstats)
+
+SSE_Results %>% 
+  dplyr::mutate(dataset = as.factor(dataset)) %>% 
+  ggplot(mapping = aes(x = alpha, y = SSE,color = initial)) + geom_point() + geom_line() + facet_wrap(~dataset,nrow = 2,scales = "free") + theme_bw()
+
+ses.Paperback.simple <- ses(books[,"Paperback"],initial = "simple", h = 4)
+ses.Paperback.optimal <- ses(books[,"Paperback"],initial = "optimal", h = 4)
+ses.Hardcover.simple <- ses(books[,"Hardcover"],initial = "simple", h = 4)
+ses.Hardcover.optimal <- ses(books[,"Hardcover"],initial = "optimal", h = 4)
+
+EstAlphaModels <- list(ses.Paperback.smpl = ses.Paperback.simple,
+                       ses.Paperbacl.Opt = ses.Paperback.optimal,
+                       ses.Hardcover.smpl = ses.Hardcover.simple,
+                       ses.Hardcover.Opt = ses.Hardcover.optimal)
+
+
+extractAlpha <- function(mdl){
+  mdl %>% .$model %>% .$par %>% head(1)
+}
+
+dataset <- rep(c("Paperback","Hardcover"),each = 2)
+initial <- rep(c("simple","optimal"),2)
+alpha <- t(purrr::map_df(EstAlphaModels,extractAlpha))
+RMSE <- t(purrr::map_df(EstAlphaModels,.f =  accuracy)[2,])
+SSE <- RMSE^2*length(books[,1])
+
+OptimalAlpha <- data.frame(dataset, initial,alpha = alpha,SSE,row.names = NULL)
+SSE_Results <- rbind.data.frame(SSE_Results,OptimalAlpha) %>% dplyr::mutate(OptimalAlpha = c(rep(0,nrow(SSE_Results)),rep(1,nrow(OptimalAlpha))))
+
+
+SSE_Results %>% 
+  dplyr::mutate(dataset = as.factor(dataset),
+                OptimalAlpha = as.logical(OptimalAlpha)) %>% 
+  ggplot(mapping = aes(x = alpha, y = SSE,color = initial, shape = OptimalAlpha)) + geom_point() + geom_line() + facet_wrap(~dataset,nrow = 2,scales = "free") + theme_bw()
+```
+
+```{r,fig.cap = "Forcasts with optimal alpha"}
+par(mfrow = c(2,2))
+plot(ses.Paperback.simple, main = "SES - Paperback, optimal alpha, initial : simple",cex.main = 1)
+plot(ses.Paperback.optimal, main = "SES - Paperback, optimal alpha, initial : optimal",cex.main = 1)
+plot(ses.Hardcover.simple, main = "SES - Hardcover, optimal alpha, initial : simple",cex.main = 1)
+plot(ses.Hardcover.optimal,main = "SES - Hardcover, optimal alpha, initial : optimal",cex.main = 1)
+```
+
+Figure 3 shows that the forecasts are identical. The exponential smoothing methods rely on the actuals for forecasting the next period. Hence the forecasts are identical.
+
+It can be seen that the optimal settings of alpha and initial values have reduced the SSE.
+
+
+# Question 7.2
+
+## a) Figure 4 shows the forecasts for the next 4 days for the sales of Hardcover and paperback computed using Holt's method. 
+
+```{r, fig.cap = "Holts method forecast for Hardcover & Paperback"}
+holt.paperback <- holt(books[,"Paperback"], h = 4)
+holt.hardcover <- holt(books[,"Hardcover"], h = 4)
+par(mfrow = c(1,2))
+plot(holt.hardcover,main = "Holts method - Hardcover", cex.main = 1)
+plot(holt.paperback, main = "Holts method - Paperback", cex.main = 1)
+SSE_holt <- data.frame(dataset = c("Paperback", "Hardcover"),
+                      SSE = c(sw_glance(holt.paperback %>% .$model)$RMSE^2*length(books[,"Hardcover"]),
+                              sw_glance(holt.hardcover %>% .$model)$RMSE^2*length(books[,"Paperback"]))
+                      )
+
+SSE_holt_ses <-
+  rbind.data.frame(
+  SSE_Results %>% dplyr::filter(OptimalAlpha == 1) %>%
+  dplyr::filter(initial == "optimal") %>%
+  dplyr::select(dataset, SSE),
+  SSE_holt
+  ) %>%
+  dplyr::mutate(Model = rep(c("Exponential Smoothing", "Holt"), each = 2))
+
+Forecasts <- cbind(SSE_holt_ses,t(sapply(list(ses.Paperback.optimal,ses.Hardcover.optimal,holt.paperback,holt.hardcover), function(x) data.frame(forecast(x,h=1))))) %>% dplyr::arrange(dataset)
+
+knitr::kable(Forecasts, caption = "Holts vs simple exponential smoothing forecasts")
+```
+
+## b) Table 1 shows the forecasts of both the simple and double exponential (Holt's) forecasting methods. The SSE of the Holt's method is less compared to simple exponential smoothing. The holts method is able to predict the slope or trend in the data. 
+
+## c) The forecasts of Holt's method is better for the reason mentioned above. 
+
+## d)
+
+# Question 7.3
+
+The holts method for several alpha and beta experiemnts with exponential trend turned on and off and damping turned on and off. Figure 4 shows the contour plot of RMSE vs alpha nad beta when exponential trend is turned on and off with damping and no damping. 
+
+The RMSE is insensitive when the damping is set to false and alpha is greater than 0.3. Which is an interesting observation. The best and worst performing model are plotted below (Figure 5).
+
+```{r, fig.cap = "Top: Left:Contour plot of RMSE vs alpha & beta with NO damping when exponential trend is off, right : When exponetial trend is ON; Bottom: Contour plot of RMSE vs alpha & beta with  damping when exponential trend is off"}
+data("eggs")
+inputs <- expand.grid(alpha = seq(0.001, 0.5, length.out = 10),beta = seq(0.0001, 0.05, length.out = 10),exponential = c(T,F), damped = c(T,F))
+
+inputs %<>% dplyr::filter(alpha > beta)
+
+holtfct <- function(alpha,beta, exponential, damped){
+  fcts <- holt(eggs,h= 100,alpha = alpha, beta = beta,exponential = exponential,damped = damped)
+  result <- fcts %>% .$model %>% sw_glance() %>% 
+    dplyr::mutate(alpha = alpha, beta = beta,exponential = exponential, damped = damped )
+  list(result = result,model = fcts)
+}
+
+safe_holtfct <- purrr::safely(holtfct)
+Results <- purrr::pmap(inputs,safe_holtfct)
+# removing those inputs that error out
+
+inputs <- inputs[which(sapply(1:364, function(x) is.null(Results[[x]]$error)) == T),]
+
+# re do model fit
+
+Results <- purrr::pmap(inputs,holtfct)
+Accuracy <- lapply(1:273, function(x) Results[[x]]$result)
+Accuracy <- do.call("rbind",Accuracy)
+
+dampF <- Accuracy %>% dplyr::filter(damped == F) %>%  ggplot(data = .,aes(x = alpha, y = beta, z = RMSE)) + geom_contour(aes(color = ..level..)) +  scale_color_gradient(low="blue", high='red')+ facet_wrap(~exponential)
+
+dampT <- Accuracy %>% dplyr::filter(damped == T) %>%  ggplot(data = .,aes(x = alpha, y = beta, z = RMSE)) + geom_contour(aes(color = ..level..)) + scale_color_gradient(low="blue", high='red') +
+  facet_wrap(~exponential)
+
+gridExtra::grid.arrange(dampT,dampF)
+
+```
+
+
+```{r, fig.cap="Top: Best model; Bottom: Worst model"}
+par(mfrow = c(2,1))
+plot(Results[[which.min(Accuracy$RMSE)]]$model,PI = F, main = "Alpha = 0.5, Beta= 0.0001, Exponential = F, Damping = F", cex.main = 0.6)
+plot(Results[[which.max(Accuracy$RMSE)]]$model, PI = F, col = "red", main = "Alpha = 0.06, Beta= 0.03, Exponential = F, Damping = F",cex.main = .6)
+```
+
+# Question 7.4
+
+## a) The ukcars data is non-staionary with seasonlity, trend and changes in level. Figure 6 shows the time series plot of the same
+
+
+```{r, fig.cap="Time series of ukcars"}
+data("ukcars")
+plot(ukcars)
+
+```
+
+## b) The ukcars data is decomposed using the stl() method. Figure 7 shows the decomposition.
+
+```{r,fig.cap="STL decomposition of ukcars"}
+stlfit <- stl(ukcars,s.window = "periodic", robust = T)
+autoplot(stlfit)
+seasonalAdj <- stlfit$time.series[,"trend"]
+```
+
+## c)  Figure 8 shows the additive damped model forecast on the seasonally adjusted data as obtained from stl(). The summary of the model is shown below.
+
+```{r, fig.cap = "Forecast of seasonally adjusted data using Holts additive method with damping."}
+holtfit <- holt(seasonalAdj,h = 8,damped = T,exponential = F)
+summary(holtfit)
+plot(holtfit, ylab = "Seasonally adjusted data")
+```
+
+```{r, fig.cap = "reseasonilized forecasts"}
+# reseasonalize
+seasoncomp <- stlfit$time.series[,"seasonal"]
+seasonalcompfct <- snaive(seasoncomp, h= 8)
+fcts <- holtfit$mean + seasonalcompfct$mean
+reseasonlizedts <- ts(c(ukcars,fcts),start = c(1977,1), frequency = 4)
+year <- c(rep(1977:2004, each = 4), rep(2005:2006, each = 4), 2007)
+qtr <- c(rep(1:4,(2006-1977+1)),1)
+data.frame(data = reseasonlizedts, year = year, qtr = qtr, year.qtr = year + qtr/10, forecast = c(rep(F,113),rep(T,8))) %>% 
+  ggplot(aes(x = year.qtr, y = data, color = forecast)) + geom_line()
+#autoplot(reseasonlizedts, col= c(rep("grey",113),rep("blue",8)))
+RMSE_Holtdamp <- sqrt(sum((ukcars - holtfit$fitted + seasonalcompfct$fitted)^2,na.rm = T)/113)
+accuracy(holtfit)
+```
+
+Figure 9 shows the reseasonlized forecasts and the RMSE for the model is 57
+
+## d)
+
+Figure 10 shows the reseasonalized forecasts using linear Holt's method and the RMSE is 56.88. Subtly better than the forecast with damping.
+
+```{r, fig.cap="Reseasonlized forecasts - Holt's linear"}
+holtlinear <- holt(seasonalAdj,h = 8,damped = F,exponential = F)
+fcts <- holtlinear$mean + seasonalcompfct$mean
+reseasonlizedts <- ts(c(ukcars,fcts),start = c(1977,1), frequency = 4)
+year <- c(rep(1977:2004, each = 4), rep(2005:2006, each = 4), 2007)
+qtr <- c(rep(1:4,(2006-1977+1)),1)
+data.frame(data = reseasonlizedts, year = year, qtr = qtr, year.qtr = year + qtr/10, forecast = c(rep(F,113),rep(T,8))) %>% 
+  ggplot(aes(x = year.qtr, y = data, color = forecast)) + geom_line()
+
+RMSE_holtlinear <- sqrt(sum((ukcars - holtlinear$fitted + seasonalcompfct$fitted)^2,na.rm = T)/113)
+accuracy(holtlinear)
+```
+## d, e and f) Figure 11 shows that decomposition using ets(). The resulting (A,N,A) model shows an accuracy of 25.25, which is alomost half of the previous 2 models. The ets model is most reasonable in this case.
+
+
+```{r, fig.cap = "ETS model fit for ukcars"}
+ets.fit <- ets(ukcars, model = "ZZZ")
+autoplot(ets.fit)
+plot(forecast(ets.fit, h = 8))
+```
+
+Comparing the models A,N,A models seems to be a better model from a RMSE perspective.
+
+# 7.5
+
+## a) The data is a non stationert time series data with seasonality and trend. The variation on seasonal values increases with the level of the series.  
+```{r, fig.cap="Time series of visitors"}
+data("visitors")
+autoplot(visitors)
+```
+
+## b & c)  The holts winter forecast for the next two years is shown in the plot below.
+
+The holt's winter method is necessary here because the variation on seasonal values increases with the level of the series.
+
+```{r, fig.cap="Holts - winters forecast"}
+hw.m.fit <- hw(visitors,seasonal = "multiplicative",h = 24)
+plot(hw.m.fit)
+```
+
+
+## d & e) 
+Figure 14 shows the experimentation with the settings of expoential & damped. 
+Based on table 2, the Damped HW multiplicative method gives the best RMSE.
+
+```{r, fig.cap="Experimentation with damping and exponential"}
+par(mfrow=c(2,2))
+plot(hw.m.fit,cex.main = 0.7)
+plot(hw(y = visitors,seasonal = "multiplicative", exponential = T),cex.main = 0.7)
+plot(hw(y = visitors,seasonal = "multiplicative", exponential = T, damped = T),cex.main = 0.7)
+plot(hw(y = visitors,seasonal = "multiplicative", exponential = F, damped = T),cex.main = 0.7)
+
+Models <- list(hw.m.fit = hw.m.fit,hw.m.exp = hw(y = visitors,seasonal = "multiplicative", exponential = T),
+               hw.m.exp.damp = hw(y = visitors,seasonal = "multiplicative", exponential = T, damped = T),
+               hw.m.damp = hw(y = visitors,seasonal = "multiplicative", exponential = F, damped = T))
+df <- do.call("rbind",purrr::map(Models, ~sw_glance(.x$model)))
+
+knitr::kable(df, caption = "Model Summary & Performance")
+
+
+```
+
+
+## f) Figure 15 shows the forecastss from the various models. Table 3 shows the respectinve RMSE. The hybrid model of STL-ETS on Box-Cox transformed data is the best from the RMSE perspective, however the residual signature makes it a poor model. Both the ETS models seems to work well for this data.
+
+```{r, fig.cap="Forecast of visitors"}
+ets.mdl <- ets(visitors)
+ets.additive <- ets(visitors,additive.only = T,lambda = BoxCox.lambda(visitors))
+snaive.mdl <- snaive(visitors,lambda = BoxCox.lambda(visitors))
+stl.decop <- stl(x = BoxCox(visitors,BoxCox.lambda(visitors)),s.window = "periodic",robust = T)
+ets.seasadj <- ets(stl.decop$time.series[,"trend"])
+stl.ets <- ets.seasadj$fitted + stl.decop$time.series[,"seasonal"]
+stl.ets.fitted <- InvBoxCox(stl.ets,BoxCox.lambda(visitors))
+stl.ets.res <- visitors - stl.ets.fitted
+
+# generate forecast
+
+fct.ets.seasonadj <- forecast(ets.seasadj,h = 24)
+fct.stl.season <- snaive(stl.decop$time.series[,"seasonal"],h = 24)
+fct.stl.ets <- InvBoxCox(fct.ets.seasonadj$mean + fct.stl.season$mean,BoxCox.lambda(visitors))
+
+fct.hw.m.fit <- forecast(hw.m.fit,h = 24)
+fct.ets.mdl <- forecast(ets.mdl,h = 24)
+fct.ets.additive <- forecast(ets.additive, h = 24)
+fct.snaive <- forecast(snaive.mdl, h = 24)
+
+# plot forecast
+
+plot(visitors, col = "grey",xlim= c(1985,2008))
+lines(fct.hw.m.fit$mean, col = "black", lty = 2)
+lines(fct.ets.mdl$mean, col = "red", lty = 2)
+lines(fct.ets.additive$mean, col = "green", lty = 2)
+lines(fct.snaive$mean, col = "orange", lty = 2)
+lines(fct.stl.ets,col = "blue", lty = 2)
+legend("topleft",legend = c("visitors", "Holts-Winters forecast",
+                            "ETS forecast", "ETS additive forecast",
+                            "snaive forecast","stl-ets hybrid forecast"),
+       lty = c(1,rep(2,5)), col = c("grey","black","red","green","orange","blue"),cex = 0.5)
+
+
+# RSME generation 
+mdls <- list(ets.mdl,ets.additive)
+sw_glance(snaive.mdl$model)
+mdls_RMSE <- purrr::reduce(purrr::map(mdls,sw_glance),bind_rows) %>% select(model.desc,RMSE) %>% 
+  dplyr::mutate(RMSE = round(RMSE,2)) %>% 
+  rbind.data.frame(
+    data.frame(model.desc = c("snaive","stl.ets"),
+    RMSE = round(c(accuracy(snaive.mdl)[2], sqrt(mean(stl.ets.res^2))),2)
+    )
+    
+  ) 
+
+knitr::kable(mdls_RMSE,caption = "RMSE for model fits")
+```
+
+```{r,fig.cap = "Residual Analysis of models"}
+par(mfrow = c(2,3))
+r1 <- checkresiduals(hw.m.fit)
+r2 <- checkresiduals(ets.mdl)
+r3 <- checkresiduals(ets.additive)
+r4 <- checkresiduals(snaive.mdl)
+r5 <- checkresiduals(stl.ets.res)
+
+```
+
+# Section 8, Q 8.5
+
+## a & b)
+
+The auto regressive model of order k is given by 
+
+$y_{t} = c + \phi_{1}y_{t-1} + \phi_{2}y_{t-2} + ... + \phi_{t-p}y_{t-p} + e_{t} $
+
+For AR(1) model ...
+
+$y_{t} = c + \phi_{1}y_{t-1} + e_{t} $
+
+Where $e_{t}$ is normally distributed error with mean zero and variance ($\sigma^2$) 1. Here $c$ is assumed to be 0.
+
+
+```{r,fig.cap = "AR(1) simulations"}
+
+AR1simul <- function(phi){
+  set.seed(1)
+  y <- ts(numeric(100))
+e <- rnorm(100)
+for(i in 2:100)
+  y[i] <- phi*y[i-1] + e[i]
+plot(y, main = paste("AR(1) of phi = ",phi), cex.main = 0.7)
+}
+# y <- AR1simul(0.05)
+# set.seed(1)
+# ytest <- arima.sim(list(ar=0.05),n = 100)
+phi <- c(-1.2,-0.3, -0.1, 0.2, 0.4, 0.6, 0.8,1, 1.2)
+par(mfrow = c(3,3))
+test <- lapply(phi,AR1simul)
+```
+
+It can be seen from figure 17 as the $\phi_{1}$ increases in magnitude the series becomes non-stationery. When $\phi_{1} = 1$, the series becomes a randomwalk. 
+
+```{r, eval=F}
+arimsim <- function(ars) {
+  sim <- arima.sim(list(ma = ars),n = 100)
+  ts.plot(sim)
+}
+
+test2 <- lapply(phi[10],arimsim)
+```
+
+## c & d ) 
+
+Figure 18 shows that as the $\phi_{1}$ changes different time series are generated.
+
+```{r}
+MR1simul <- function(phi){
+  set.seed(1)
+  y <- ts(numeric(100))
+e <- rnorm(100)
+for(i in 2:100)
+  y[i] <- phi*e[i-1] + e[i]
+plot(y, main = paste("MR(1) of phi = ",phi), cex.main = 0.7)
+}
+par(mfrow = c(3,3))
+test <- lapply(phi,MR1simul)
+```
+
+## e,f & g
+
+ARMA(1,1) seems stationary, however the AR(2) is not.
+
+```{r, warning=F, fig.cap = "ARMA(1,1) and AR(2) comparison"}
+ts.sim <- arima.sim(list(order = c(1,0,1), ar = 0.6, ma = 0.6), n = 100)
+AR2simul <- function(phi1,phi2){
+  set.seed(1)
+  y <- ts(numeric(100))
+e <- rnorm(100)
+for(i in 3:100)
+  y[i] <- phi*y[i-1] + phi2*y[i-2] + e[i]
+plot(y, main = paste("AR(2) of phi1 = ",phi1," & phi2 = ",phi2), cex.main = 0.7)
+
+}
+
+
+par(mfror = c(2,1))
+ts.plot(ts.sim, main = "ARMA(1,1) simulation")
+AR2simul(-0.8,0.3)
+```
+
+# Question 8.6
+
+```{r}
+data("wmurders")
+
+```
+
