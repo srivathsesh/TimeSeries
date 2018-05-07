@@ -2,14 +2,14 @@
 title: "Assignment 2"
 author: "Sri Seshadri"
 date: "5/4/2018"
-output: 
+output:
   pdf_document:
-    toc: true
+    toc: yes
     toc_depth: 1
 ---
 
-```{r setup, include=F,warning=FALSE,message=F,error=FALSE,fig.show='asis',tidy.opts=list(width.cutoff=70),tidy=TRUE}
-knitr::opts_chunk$set(echo = F)
+```{r setup, include=F,warning=FALSE,message=F,error=FALSE,fig.show='asis',tidy.opts=list(width.cutoff=70),tidy=TRUE,fig.show='asis'}
+knitr::opts_chunk$set(echo = T)
 library(magrittr)
 library(dplyr)
 library(fpp)
@@ -23,7 +23,7 @@ library(sweep)
 
 ## a) Figure 1 shows the timeseries of the books data. The paperback series have  change in levels more so than a trend. The hardcover series have a subtle upward trend. The saw tooth pattern in data shows seasonality, but with varying levels of peaks. 
 
-```{r, fig.cap="Time series of books", fig.height=3, fig.pos="asis"}
+```{r, fig.cap="Time series of books", fig.height=3, fig.show="asis"}
 data("books")
 autoplot(books,facet = T) + theme_bw() + geom_smooth(se = F)
 ```
@@ -334,7 +334,7 @@ legend("topleft",legend = c("visitors", "Holts-Winters forecast",
 
 # RSME generation 
 mdls <- list(ets.mdl,ets.additive)
-sw_glance(snaive.mdl$model)
+#sw_glance(snaive.mdl$model)
 mdls_RMSE <- purrr::reduce(purrr::map(mdls,sw_glance),bind_rows) %>% select(model.desc,RMSE) %>% 
   dplyr::mutate(RMSE = round(RMSE,2)) %>% 
   rbind.data.frame(
@@ -363,11 +363,11 @@ r5 <- checkresiduals(stl.ets.res)
 
 The auto regressive model of order k is given by 
 
-$y_{t} = c + \phi_{1}y_{t-1} + \phi_{2}y_{t-2} + ... + \phi_{t-p}y_{t-p} + e_{t} $
+y_{t} = c + phi_{1}y_{t-1} + phi_{2}y_{t-2} + ... + phi_{t-p}y_{t-p} + e_{t}
 
 For AR(1) model ...
 
-$y_{t} = c + \phi_{1}y_{t-1} + e_{t} $
+y_{t} = c + phi_{1}y_{t-1} + e_{t}
 
 Where $e_{t}$ is normally distributed error with mean zero and variance ($\sigma^2$) 1. Here $c$ is assumed to be 0.
 
@@ -442,8 +442,129 @@ AR2simul(-0.8,0.3)
 
 # Question 8.6
 
+## a & d) 
+
+Figure 21 shows the time series of wmurders. I would guess with the changes in level like stock data, it would need at least one differencing. A naive model with forecast equaling the previous data would likely be better. I am thinking either 1 regressive part or 1 moving average (may be both?) might work best.
+
 ```{r}
 data("wmurders")
+autoplot(wmurders)
 
+```
+
+Here we'll fit the ARIMA(1,1,0), ARIMA(0,1,1) and ARIMA(1,1,1). From the accuracy of the models, all the three models are close. From the residual perspective ARIMA(1,1,1) seems relatively better.
+
+```{r,fig.cap = "Residual checks for wmirders"}
+mdl1 <- Arima(wmurders,order = c(1,1,0))
+mdl2 <- Arima(wmurders,order = c(0,1,1))
+mdl3 <- Arima(wmurders,order = c(1,1,1))
+
+purrr::reduce(.x = purrr::map(list(mdl1,mdl2,mdl3),.f = sw_glance),.f = bind_rows)
+
+checkresiduals(mdl1)
+checkresiduals(mdl2)
+checkresiduals(mdl3)
+
+
+```
+
+## b) Adding a constant adds a drift to the forecast. The time series is not  contantly increasing / decreasing. Hence adding a constant may not make sense for this data.
+
+## c)
+
+(1 - phi1B) (1-B)yt = (1 + theta1)et
+
+## e & f)
+
+```{r, fig.cap="Forecast with Arima"}
+plot(forecast(mdl3, h = 3))
+
+```
+
+```{r, fig.cap="Auto Arima model"}
+arimaauto <- auto.arima(wmurders)
+accuracy(arimaauto)
+checkresiduals(arimaauto)
+```
+## g) The ARIMA(1,1,1) and ARIMA(1,2,1) are very comparable in its forecast accuracy. 
+
+
+# 8.7
+
+## a) 
+
+The austourists data has both seasonality and trend. 
+
+```{r}
+data("austourists")
+autoplot(austourists)
+```
+## b & c) The ACF captures the trend and nearly shows all lags are significant ... The PACF removes the effect of the trend and shows tha tthe seasonality (lag 4) shows up as the key correlation factor.
+
+```{r, fig.cap="ACF & PACF austourists"}
+par(mfrow = c(1,2))
+Acf(austourists)
+pacf(austourists)
+```
+##d) 
+```{r, fig.cap = "austourists"}
+plot(diff(austourists,nsdiffs(austourists,4)))
+```
+
+The seasonal differences still show a seasonality in the data. ARIMA(1,0,0)(1 or 4?,1,0) may work. 
+
+```{r}
+auto.arima(austourists)
+```
+
+## f) 
+
+ (1-phi1B) (1-B^4)yt = et 
+
+
+# 8.8
+
+## a) The time series shows increasing trend and the variation in peaks is proportional to time.
+```{r, fig.cap = "time series of usmelec"}
+data("usmelec")
+
+plot(usmelec,col = "grey")
+lines(forecast::ma(usmelec, 12))
+```
+
+## b) 
+```{r}
+lambda <- BoxCox.lambda(usmelec)
+autoplot(BoxCox(usmelec,lambda))
+```
+
+The boxcox transformation has reduced the variability in the peaks and valleys. There is seasons in the data. Hence not stationary. A 12 month differencing might help, as shown below.
+
+```{r, fig.cap = "12 month differencing of transformed usmelec"}
+usmelectrans <- BoxCox(usmelec,lambda)
+plot(diff(usmelectrans,12))
+```
+
+## d & e)
+
+The auto.arima model came out to be the better from AIC perspective and RMSE perspective. The residuals look like whitenoise. 
+```{r, fig.cap="Residual check"}
+fit1 <- Arima(usmelectrans, order = c(1,0,1), seasonal = c(1,0,1))
+fit2 <- Arima(usmelectrans, order = c(2,1,1), seasonal = c(2,0,1))
+fit3 <- auto.arima(usmelectrans)
+mdls2 <- list(fit1,fit2,fit3)
+
+knitr::kable(purrr::reduce(purrr::map(mdls2,.f = sw_glance),bind_rows), caption = "Model comparison")
+
+checkresiduals(fit3)
+```
+
+## f & g) 
+
+Forecasts are reasonable in short terms and not on the long term. Forecast models with drift need to be used carefully. 
+
+```{r, fig.cap="15 year projection"}
+fcts <- forecast(fit3, h = 180)
+plot(fcts$mean)
 ```
 
