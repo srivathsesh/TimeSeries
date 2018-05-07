@@ -36,6 +36,19 @@ ItemCategories <- read.csv("./Midterm/item_categories.csv")
 # Items
 Items <- read.csv('./Midterm/items.csv')
 
+# Items look up translated
+
+ItemsReference <- readxl::read_xlsx(path = "./Midterm/LookUps.xlsx", sheet = "items-translated")
+ItemsReference %<>% dplyr::mutate(Cinema = ifelse(stringr::str_detect(Category,"Cinema"),1,0),
+                                  Music = ifelse(stringr::str_detect(Category,"Music"),1,0),
+                                  Games = ifelse(stringr::str_detect(Category,"Games"),1,0),
+                                  Books = ifelse(stringr::str_detect(Category,"Books"),1,0),
+                                  Accesories = ifelse(stringr::str_detect(Category,"Accesories"),1,0),
+                                  Gifts = ifelse(stringr::str_detect(Category,"Gifts"),1,0),
+                                  Programs = ifelse(stringr::str_detect(Category,"Programs"),1,0)
+                                  ) %>% 
+  dplyr::mutate(Others = ifelse(rowSums(.[5:11]) < 1,1,0))
+
 # Aggregated data 
 Agg_sales_train <- sales_train %>% 
                  dplyr::mutate(date = lubridate::parse_date_time(date,orders = "%d.%m.%Y")) %>% 
@@ -43,7 +56,8 @@ Agg_sales_train <- sales_train %>%
                  dplyr::summarise(MonthlyCts = sum(item_cnt_day),Price = mean(item_price,na.rm = T)) %>% 
                  dplyr::arrange(item_id,shop_id,date_block_num) %>% 
                  dplyr::mutate(Item.Shop = item_id + shop_id / 100) %>% 
-                 dplyr::left_join(x = ., y = Items[,2:3])
+                 dplyr::left_join(x = ., y = Items[,2:3]) %>% 
+                 dplyr::left_join(x =., y = ItemsReference[,c(1,5:12)])
 # Reference frame
 df <- data.frame(date_block_num = rep(seq(min(Agg_sales_train$date_block_num),max(Agg_sales_train$date_block_num)),n_distinct(Agg_sales_train$Item.Shop)),
                  Item.Shop = rep(unique(Agg_sales_train$Item.Shop),each = max(Agg_sales_train$date_block_num) - min(Agg_sales_train$date_block_num) + 1)
@@ -106,7 +120,7 @@ corrplot::corrplot(cormat,order = "hclust",tl.cex = 0.6)
 library(reshape2)
 HighCors <- subset(melt(cormat,varnames = c('CatA', 'CatB'), value.name = 'Correlations'), Correlations >= 0.8 & Correlations < 1)
 
-HighCors[which(HighCors$CatA == 83),] %>% distinct(CatB)
+HighCors[which(HighCors$CatA == 40),] %>% distinct(CatB)
 testdf <- RetrieveItemStores(category = 2) %>% distinct(item_id)
 
 
@@ -208,3 +222,4 @@ lm(`1201.04` ~ `935.07`+`965`+`2137.35`+`2631.31`+`3620.31`+`4982.29`+`5331.39`+
 
 ```
 
+# Where do the 
