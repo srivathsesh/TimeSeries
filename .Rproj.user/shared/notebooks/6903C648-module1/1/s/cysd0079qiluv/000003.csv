@@ -1,2 +1,0 @@
-"0","DriftMethod <- forecast::rwf(beer2,h=11,drift = T)"
-"0","plot(DriftMethod)"

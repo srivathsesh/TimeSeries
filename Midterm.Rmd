@@ -58,8 +58,9 @@ ItemsReference %<>% dplyr::mutate(Cinema = ifelse(stringr::str_detect(Category,"
 #                               Aggregated data
 #-------------------------------------------------------------------------------------------------- 
 Agg_sales_train <- sales_train %>% 
-                 dplyr::mutate(date = lubridate::parse_date_time(date,orders = "%d.%m.%Y")) %>% 
-                 dplyr::group_by(item_id,shop_id,date_block_num) %>% 
+                 dplyr::mutate(date = lubridate::parse_date_time(date,orders = "%d.%m.%Y"),
+                               month = lubridate::month(date)) %>% 
+                 dplyr::group_by(item_id,shop_id,date_block_num,month) %>% 
                  dplyr::summarise(MonthlyCts = sum(item_cnt_day),Price = mean(item_price,na.rm = T)) %>% 
                  dplyr::arrange(item_id,shop_id,date_block_num) %>% 
                  dplyr::mutate(Item.Shop = item_id + shop_id / 100) %>% 
@@ -296,12 +297,20 @@ Predictors <- colnames(MusicCDtrain)[stringr::str_detect(colnames(MusicCDtrain),
 Reponses <- colnames(MusicCDtrain)[stringr::str_detect(colnames(MusicCDtrain), as.character(items_id_55$item_id))]
 
 
-MusicCDtrain %>% dplyr::filter(complete.cases(.))
-
-paste0("`",paste0(Predictors,pad = '`'),collapse = "+")
-
-lm(`1201.04` ~ `935.07`+`965`+`2137.35`+`2631.31`+`3620.31`+`4982.29`+`5331.39`+`5331.42`+`6333.18`+`7265.41`+`7314.07`+`7430.26`+`7485.15`+`7499.45`+`7531.07`+`7651.35`+`8280.44`+`8297.34`+`8318.28`+`8683.31`+`8739.46`+`9165.41`+`9578.29`+`9597.31`+`10021.47`+`10300.48`+`10446.45`+`10876.19`+`11629.21`+`12455.31`+`12459.06`+`12718.57`+`12785.13`+`13785.57`+`13855.57`+`14143.24`+`14271.21`+`14282.22`+`14387.42`+`14522.28`+`14672.33`+`15558.43`+`15702.29`+`16677.29`+`16710.44`+`16725.35`+`16874.26`+`16889.52`+`17174.28`+`17499.57`+`17833.13`+`18259.46`+`18537.13`+`18589.5`+`18592.57`+`18881.38`+`19162.48`+`19185.54`+`19195.35`+`19287.07`+`19547.51`+`21357.49`+`21426.42`+`21542.15`+`21647.5`,data = MusicCDtrain,singular.ok = T)
+# MusicCDtrain %>% dplyr::filter(complete.cases(.))
+# 
+# paste0("`",paste0(Predictors,pad = '`'),collapse = "+")
+# 
+# lm(`1201.04` ~ `935.07`+`965`+`2137.35`+`2631.31`+`3620.31`+`4982.29`+`5331.39`+`5331.42`+`6333.18`+`7265.41`+`7314.07`+`7430.26`+`7485.15`+`7499.45`+`7531.07`+`7651.35`+`8280.44`+`8297.34`+`8318.28`+`8683.31`+`8739.46`+`9165.41`+`9578.29`+`9597.31`+`10021.47`+`10300.48`+`10446.45`+`10876.19`+`11629.21`+`12455.31`+`12459.06`+`12718.57`+`12785.13`+`13785.57`+`13855.57`+`14143.24`+`14271.21`+`14282.22`+`14387.42`+`14522.28`+`14672.33`+`15558.43`+`15702.29`+`16677.29`+`16710.44`+`16725.35`+`16874.26`+`16889.52`+`17174.28`+`17499.57`+`17833.13`+`18259.46`+`18537.13`+`18589.5`+`18592.57`+`18881.38`+`19162.48`+`19185.54`+`19195.35`+`19287.07`+`19547.51`+`21357.49`+`21426.42`+`21542.15`+`21647.5`,data = MusicCDtrain,singular.ok = T)
 
 ```
 
-# Where do the 
+# Linear Regerssion Modeling 
+
+```{r}
+MonthlySales.ItemShop %<>% dplyr::mutate(item_id = as.factor(item_id), shop_id = as.factor(shop_id), item_category_id = as.factor(item_category_id))
+test <- ts()
+```
+
+
+
