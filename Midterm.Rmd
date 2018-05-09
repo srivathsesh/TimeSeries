@@ -15,6 +15,7 @@ library(dplyr)
 library(forecast)
 library(zoo)
 library(ggplot2)
+library(stringr)
 ```
 
 
@@ -41,13 +42,14 @@ Items <- read.csv('./Midterm/items.csv')
 
 ItemsReference <- readxl::read_xlsx(path = "./Midterm/LookUps.xlsx", sheet = "items-translated")
 ShopReference <- readxl::read_xlsx(path = "./Midterm/LookUps.xlsx", sheet = "ShopLocations")
-ShopReference %<>% dplyr::mutate(city = as.factor(city))
+ShopReference %<>% dplyr::mutate(city = as.factor(city),shop_id = as.integer(shop_id))
 ItemCatNomenclature <- readxl::read_xlsx(path = "./Midterm/LookUps.xlsx", sheet = "item_categories-translated.csv")
-ItemsReference %<>% dplyr::mutate(Cinema = ifelse(stringr::str_detect(Category,"Cinema"),1,0),
+ItemsReference %<>% dplyr::mutate(item_id = as.integer(item_id),
+                                  Cinema = ifelse(stringr::str_detect(Category,"Cinema"),1,0),
                                   Music = ifelse(stringr::str_detect(Category,"Music"),1,0),
                                   Games = ifelse(stringr::str_detect(Category,"Games"),1,0),
                                   Books = ifelse(stringr::str_detect(Category,"Books"),1,0),
-                                  Accesories = ifelse(stringr::str_detect(Category,"Accesories"),1,0),
+                                  Accesories = ifelse(stringr::str_detect(Category,"Accessories"),1,0),
                                   Gifts = ifelse(stringr::str_detect(Category,"Gifts"),1,0),
                                   Programs = ifelse(stringr::str_detect(Category,"Programs"),1,0) # needing to find how two keyword in a category need to be adjusted?
                                   ) %>% 
@@ -59,8 +61,12 @@ ItemsReference %<>% dplyr::mutate(Cinema = ifelse(stringr::str_detect(Category,"
 #-------------------------------------------------------------------------------------------------- 
 Agg_sales_train <- sales_train %>% 
                  dplyr::mutate(date = lubridate::parse_date_time(date,orders = "%d.%m.%Y"),
-                               month = lubridate::month(date)) %>% 
-                 dplyr::group_by(item_id,shop_id,date_block_num,month) %>% 
+                               month = lubridate::month(date),
+                               year = lubridate::year(date),
+                               YearMonth = (year + month/100),
+                               shop_id = as.integer(shop_id),
+                               item_id = as.integer(item_id)) %>% 
+                 dplyr::group_by(item_id,shop_id,date_block_num,YearMonth) %>% 
                  dplyr::summarise(MonthlyCts = sum(item_cnt_day),Price = mean(item_price,na.rm = T)) %>% 
                  dplyr::arrange(item_id,shop_id,date_block_num) %>% 
                  dplyr::mutate(Item.Shop = item_id + shop_id / 100) %>% 
@@ -71,6 +77,13 @@ Agg_sales_train <- sales_train %>%
 #-------------------------------------------------------------------
 # Reference frame
 #-------------------------------------------------------------------
+# lookup for date_block_num for ts() at a later time
+dateblockref <-
+  Agg_sales_train %>% dplyr::ungroup() %>% 
+  dplyr::distinct(date_block_num, YearMonth) %>% 
+  arrange(date_block_num) %>% 
+  tidyr::separate(YearMonth,c("year","month")) %>% 
+  dplyr::mutate_at(.vars = c("year","month"),funs(as.integer))
 df <-
   data.frame(
   date_block_num = rep(seq(
@@ -82,19 +95,27 @@ df <-
   each = max(Agg_sales_train$date_block_num) - min(Agg_sales_train$date_block_num) + 1
   )
   ) %>%
-  tidyr::separate(., 2, c("item_id", "shop_id")) %>%
-  dplyr::mutate(shop_id = ifelse(is.na(shop_id), 0, shop_id)) %>%
-  dplyr::mutate(item_id = as.numeric(item_id), shop_id = as.numeric(shop_id))
+  #tidyr::separate(., 2, c("item_id", "shop_id",sep = "\\.")) %>%
+  #dplyr::mutate(shop_id = ifelse(is.na(shop_id), 0, shop_id)) %>%
+  #dplyr::mutate(item_id = as.integer(item_id), shop_id = as.integer(shop_id)) %>% 
+  dplyr::mutate(item_id = as.integer(floor(Item.Shop)), shop_id = as.integer((Item.Shop - item_id)*100)) %>% 
+  dplyr::left_join(.,dateblockref)
 
 
 #---------------------------------------------------------------------------------------
-# Monthly sales reference data frame includes shop id
+# Monthly sales reference data frame  - Master data framw
 #---------------------------------------------------------------------------------------
-MonthlySales.ItemShop <- df %>% 
-        dplyr::left_join(.,Agg_sales_train[1:5]) %>% 
+MonthlySales.ItemShop <- df[,-2] %>% 
+        dplyr::left_join(.,Agg_sales_train[,c(1:6)],by = c("item_id" = "item_id", "shop_id" = "shop_id","date_block_num" = "date_block_num")) %>% 
         dplyr::left_join(.,ItemsReference[-2]) %>% 
         dplyr::left_join(.,ShopReference[2:3]) %>% 
-        dplyr::mutate(city = as.factor(city))
+        dplyr::mutate(city = as.factor(city)) %>% 
+        dplyr::select(-YearMonth) %>% # redundant
+        dplyr::mutate(imp = ifelse(is.na(MonthlyCts),1,0)) %>% # id rows imputed
+        dplyr::mutate(MonthlyCts = ifelse(imp==1,0,MonthlyCts)) %>% 
+        dplyr::arrange(item_id,shop_id,date_block_num) %>%
+        dplyr::distinct() # Spent 10 hours trying to digure what is causing the duplicates... no success.
+#dplyr::mutate(Cusum = ave(x = MonthlyCts,item_id, FUN = cumsum)) # Is used to identify the begining of the timeseries
 
 # ------------------------------------------------------------------------------------------
 # DO I NEED THIS NOW???
@@ -167,12 +188,37 @@ SuperCategory <- function(string) {
 
 # 3 ArrangeData
 
-ArrangeData <- function(data = MonthlySales.ItemShop, Category = NULL, ...){
+ArrangeData <- function(data = MonthlySales.ItemShop, CategorySuperlative = NULL, item_category_id = NULL, CategoryDesc = NULL, ...){
   opts <- list(...) # How can we use High level Category filters?
-  if(!is.null(Category)){
-    data %>% filter(Category %in% Category)
+  
+  # filter by super category
+  if(!is.null(CategorySuperlative)){
+   data %<>% dplyr::filter_at(vars(which(colnames(.) %in% CategorySuperlative)),all_vars(as.integer(.)== 2))
   }
+  # filter by item_category_id
+  if(!is.null(item_category_id)){
+    data %<>% dplyr::filter(item_category_id %in% !!item_category_id)
+  }
+  if(!is.null(CategoryDesc)){
+    data %<>% dplyr::filter(Category %in% !!CategoryDesc)
+  }
+  # selection
+  data %<>% dplyr::mutate(Item.Shop = as.character(item_id + shop_id/100)) %>% 
+    dplyr::select(date_block_num,Item.Shop,MonthlyCts,Price)
+  
+  # spread 
+  
+  data %<>% 
+    
+    tidyr::gather(variable,value, -c(date_block_num,Item.Shop)) %>% 
+    tidyr::unite(temp,Item.Shop,variable) %>% 
+    tidyr::spread(temp,value)
+  
+  ts(data,start = 2013, frequency = 12)
+  
 }
+
+
 ```
 
 ## Data exploration by item category
@@ -204,7 +250,7 @@ cormat2 <- cor(MonthlySalebyCategoryGrp[-1])
 corrplot::corrplot(cormat2,method = c("number"))
 
 HighCors2 <- subset(melt(cormat2,varnames = c('CatA', 'CatB'), value.name = 'Correlations'), Correlations >= 0.8 & Correlations < 1)
-HighCors2[]
+
 ```
 
 ## Gaming consoles, accessories and games.
@@ -308,8 +354,8 @@ Reponses <- colnames(MusicCDtrain)[stringr::str_detect(colnames(MusicCDtrain), a
 # Linear Regerssion Modeling 
 
 ```{r}
-MonthlySales.ItemShop %<>% dplyr::mutate(item_id = as.factor(item_id), shop_id = as.factor(shop_id), item_category_id = as.factor(item_category_id))
-test <- ts()
+
+
 ```
 
 
