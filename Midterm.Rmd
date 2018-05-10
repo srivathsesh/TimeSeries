@@ -251,24 +251,30 @@ ArrangeData <- function(data = MonthlySales.ItemShop, CategorySuperlative = NULL
   
 if(!is.null(aggCriteria)){
   ResponseCriteria = names(response)
-  if(all(is.element(c("shop_id","item_id"),ResponseCriteria))){
+  if(all(is.element(c("shop_ids","item_ids"),ResponseCriteria))){
     Response <- data  %>% 
       dplyr::filter(item_id == !!response$item_id, shop_id == !!response$shop_id) %>% 
       dplyr::select(date_block_num,item_id,shop_id,MonthlyCts,Price) %>% 
       dplyr::arrange(date_block_num,item_id,shop_id) %>% 
       dplyr::mutate(Item.Shop = as.character(item_id + shop_id/100))
   } else{
-    if(all(is.element(c("shop_id","item_category_id"),ResponseCriteria))){
+    if(all(is.element(c("shop_ids","category_id"),ResponseCriteria))){
       Response <- data  %>% 
-        dplyr::filter(item_category_id == !!response$item_category_id, shop_id == !!response$shop_id) %>% 
+        dplyr::filter(item_category_id == !!response$category_id, shop_id == !!response$shop_id) %>% 
         dplyr::select(date_block_num,shop_id,item_category_id,MonthlyCts,Price) %>% 
         dplyr::arrange(date_block_num,item_category_id,shop_id) %>% 
         dplyr::group_by(date_block_num,item_category_id,shop_id) %>% 
         dplyr::summarise(MonthlyCts = sum(MonthlyCts, na.rm = T), Price = mean(Price,na.rm = T)) %>% 
         dplyr::mutate(itmCatid.ShopID = as.character(item_category_id + shop_id/100))
+      
+      
+      Response %<>% dplyr::ungroup() %>%  
+          tidyr::gather(variable, value, -c(date_block_num, itmCatid.ShopID)) %>% 
+          tidyr::unite(temp, itmCatid.ShopID, variable) %>% 
+          tidyr::spread(temp, value) %>% dplyr::select(-ends_with("_id"))
     }
     else{
-      if(all(is.element(c("shop_id","CategorySuper"),ResponseCriteria))){
+      if(all(is.element(c("shop_ids","CategorySuper"),ResponseCriteria))){
         
         aggResItemIDs <-  ItemsReference %>% dplyr::select(item_id,!!ResponseCriteria$CatergorySuper) %>%
           dplyr::filter_at(2,any_vars(as.integer(.)== 2)) %>% dplyr::select(item_id) %>% .$item_id
@@ -280,6 +286,11 @@ if(!is.null(aggCriteria)){
           dplyr::group_by(date_block_num,item_id,shop_id) %>% 
           dplyr::summarise(MonthlyCts = sum(MonthlyCts, na.rm = T), Price = mean(Price,na.rm = T)) %>% 
           dplyr::mutate(Item.ShopID = as.character(item_id + shop_id/100))
+        
+        Response %<>% dplyr::ungroup() %>%  
+          tidyr::gather(variable, value, -c(date_block_num, itmCatid.ShopID)) %>% 
+          tidyr::unite(temp, Item.ShopID, variable) %>% 
+          tidyr::spread(temp, value) #%>% dplyr::select(-ends_with("_id"))
       }
     }
   }
@@ -298,19 +309,29 @@ if(!is.null(aggCriteria)){
   if(locFlag){
     if(nrow(Predictors) > 0){
       Predictors %<>% dplyr::group_by(date_block_num,item_id,city) %>% 
-      dplyr::summarise(MonthlyCts = sum(MonthlyCts,na.rm = T),Price = mean(Price,na.rm = T)) %>% 
-      dplyr::mutate(Item.City = paste0(as.character("item_id"),"_",city))
+        dplyr::summarise(MonthlyCts = sum(MonthlyCts,na.rm = T),Price = mean(Price,na.rm = T)) %>% 
+        dplyr::mutate(Item.City = paste0(as.character(item_id),"_",city)) %>% 
+        tidyr::gather(variable,value, -c(date_block_num,Item.City)) %>% 
+        tidyr::unite(temp,Item.City,variable) %>%
+        tidyr::spread(temp,value)
+      
     } else {
       Predictors <- data %>% dplyr::group_by(date_block_num,item_id,city) %>% 
-      dplyr::summarise(MonthlyCts = sum(MonthlyCts,na.rm = T),Price = mean(Price,na.rm = T)) %>% 
-      dplyr::mutate(Item.City = paste0(as.character("item_id"),"_",city))
+        dplyr::summarise(MonthlyCts = sum(MonthlyCts,na.rm = T),Price = mean(Price,na.rm = T)) %>% 
+        dplyr::mutate(Item.City = paste0(as.character(item_id),"_",city)) %>% 
+        tidyr::gather(variable,value, -c(date_block_num,Item.City)) %>% 
+        tidyr::unite(temp,Item.City,variable) %>%
+        tidyr::spread(temp,value)
     }
     
     
   } else{
     Predictors %<>% dplyr::group_by(date_block_num,item_id,shop_id) %>% 
       dplyr::summarise(MonthlyCts = sum(MonthlyCts,na.rm = T),Price = mean(Price,na.rm = T)) %>% 
-      dplyr::mutate(Item.Shop = as.character(item_id + shop_id/100))
+      dplyr::mutate(Item.Shop = as.character(item_id + shop_id/100)) %>% 
+      tidyr::gather(variable,value, -c(date_block_num,Item.Shop)) %>% 
+      tidyr::unite(temp,Item.City,variable) %>%
+      tidyr::spread(temp,value)
   }
   
   browser()
