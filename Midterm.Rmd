@@ -57,10 +57,48 @@ ItemsReference %<>% dplyr::mutate(item_id = as.integer(item_id),
   dplyr::mutate(Others = ifelse(rowSums(.[5:11]) < 1,1,0)) %>% 
   dplyr::mutate_at(.vars = 5:12, funs(factor))
 
+
+#----------------------------------------
+# OUtlier remove
+#-------------------------------------------
+
+sales_train %>% dplyr::select(item_id,item_cnt_day) %>% dplyr::group_by(item_id) %>% skimr::skim() -> summarytrain
+
+summarytrain %<>% dplyr::filter(stat %in% c('mean','p50', 'p0','p75','p100')) %>% 
+  select(item_id,stat,formatted) %>% tidyr::spread(stat,formatted) %>% 
+  select(item_id,p0,p50,mean,p75,p100) %>% mutate_if(is.character,as.numeric) %>% 
+  mutate(High = p100 - p50, Low = p50-p0) 
+  summarytrain %>% ggplot(aes(x = item_id, y = High)) + geom_point() ->  p
+  ggplotly(p)
+  summarytrain %>% ggplot(aes(x = item_id, y = Low)) + geom_point() -> q
+  ggplotly(q)
+  
+Highoutlieritems <- summarytrain[which(summarytrain$High > 100),"item_id"]
+
+sales_train %>% dplyr::filter(item_id %in% Highoutlieritems$item_id) %>%
+  dplyr::group_by(item_id,shop_id) %>% 
+  summarise(Max = max(item_cnt_day),Median = median(item_cnt_day)) %>% dplyr::ungroup() %>% 
+  dplyr::group_by(item_id) -> OutlierInfo
+ OutlierInfo %>%  dplyr::summarise(MaxMax = max(Max)) -> OutlierInfoSel
+
+sales_train %<>% mutate(impute = ifelse(item_id %in% !!OutlierInfoSel$item_id & item_cnt_day %in% OutlierInfoSel$MaxMax,1,0))
+
+# impute values
+implookup <- dplyr::inner_join(OutlierInfo, OutlierInfoSel,by = c('item_id' = 'item_id','Max' = 'MaxMax'))
+sales_train %<>% dplyr::mutate(ImputedVal = NA)
+colnames(implookup)[4] <- 'ImputedVal'
+
+sales_train_imp <- merge(sales_train,implookup[,-3],by = c("item_id"="item_id","shop_id"="shop_id")) %>% dplyr::mutate(impitem_cnt_day = ifelse(impute==1,ImputedVal.y,item_cnt_day))
+
+```
+
+
+```{r}
+
 #--------------------------------------------------------------------------------------------------
 #                               Aggregated data
 #-------------------------------------------------------------------------------------------------- 
-Agg_sales_train <- sales_train %>% 
+Agg_sales_train <- sales_train_imp %>% 
                  dplyr::mutate(date = lubridate::parse_date_time(date,orders = "%d.%m.%Y"),
                                month = lubridate::month(date),
                                year = lubridate::year(date),
@@ -68,7 +106,7 @@ Agg_sales_train <- sales_train %>%
                                shop_id = as.integer(shop_id),
                                item_id = as.integer(item_id)) %>% 
                  dplyr::group_by(item_id,shop_id,date_block_num,YearMonth) %>% 
-                 dplyr::summarise(MonthlyCts = sum(item_cnt_day),Price = mean(item_price,na.rm = T)) %>% 
+                 dplyr::summarise(MonthlyCts = sum(impitem_cnt_day),Price = mean(item_price,na.rm = T)) %>% 
                  dplyr::arrange(item_id,shop_id,date_block_num) %>% 
                  dplyr::mutate(Item.Shop = item_id + shop_id / 100) %>% 
                  dplyr::left_join(x = ., y = Items[,2:3]) %>% 
@@ -293,6 +331,25 @@ if(!is.null(aggCriteria)){
           tidyr::unite(temp, Item.ShopID, variable) %>% 
           tidyr::spread(temp, value) #%>% dplyr::select(-ends_with("_id"))
       }
+      
+      else{
+        if(all(is.element(c("category_id"),ResponseCriteria))){
+      Response <- data  %>% 
+        dplyr::filter(item_category_id == !!response$category_id) %>% 
+        dplyr::select(date_block_num,item_category_id,MonthlyCts,Price) %>% 
+        dplyr::arrange(date_block_num,item_category_id) %>% 
+        dplyr::group_by(date_block_num,item_category_id) %>% 
+        dplyr::summarise(MonthlyCts = sum(MonthlyCts, na.rm = T), Price = mean(Price,na.rm = T)) %>% 
+        dplyr::mutate(itmCatid.ShopID = as.character(item_category_id + shop_id/100))
+      
+      
+      Response %<>% dplyr::ungroup() %>%  
+          tidyr::gather(variable, value, -c(date_block_num, itmCatid.ShopID)) %>% 
+          tidyr::unite(temp, itmCatid.ShopID, variable) %>% 
+          tidyr::spread(temp, value) %>% dplyr::select(-ends_with("_id"))
+    }
+      }
+      
     }
   }
   
@@ -393,6 +450,18 @@ test %>% dplyr::mutate(Flag = ifelse(is.na(Cinema),1,0)) %>% dplyr::distinct()
 ## Data exploration by item category
 
 In this section we'll explore the correlation amongst item categories. 
+
+```{r}
+MonthlySales.ItemShop %>% dplyr::select(item_category_id, MonthlyCts) %>% dplyr::group_by(item_category_id) %>% skimr::skim() -> SummaryStats
+
+SummaryStats %>% dplyr::filter(stat %in% c('mean','p50', 'p0','p75','p100')) %>% 
+  select(item_category_id,stat,formatted) %>% tidyr::spread(stat,formatted) %>% 
+  select(item_category_id,p0,p50,mean,p75,p100) %>% mutate_if(is.character,as.numeric) %>% 
+  mutate(High = p100 - p50, Low = p50-p0)
+
+
+```
+
 
 ```{r,fig.height = 4}
 # Correlation plot 
@@ -603,6 +672,8 @@ Shop31_cat40.stats <- broom::augment(Shop31_cat40.lm)
 Shop31_cat40.stats %>% ggplot(aes(x = .fitted, y = .resid)) + geom_point()
 
 Shop31_cat40.stats %>% lattice::xyplot(.resid ~ Cinema._Kaluga + Cinema._Khimki +  Cinema._Samara + Music._Khimki + Music._Moscow, .)
+
+
 ```
 ```{r}
 car::vif(Shop31_cat40.lm)
@@ -625,7 +696,7 @@ checkresiduals(Shop31_cat40.lm.arima)
 # Data set up for Cinema into a hierarchical model
 
 ```{r}
-CinemaHM <- ArrangeData(CategorySuperlative = c("Cinema, Music"))
+MonthlySales.ItemShop %>% dplyr::group_by(date_block_num,Category,City) %>% dplyr::summarise(Sales = sum(MonthlyCts)
 ```
 
 

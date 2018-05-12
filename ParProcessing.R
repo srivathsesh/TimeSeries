@@ -29,9 +29,9 @@ clusterEvalQ(cl,{
 #   RunForecastMethods(testvalslist[i])
 # }
 
-Results <- parLapply(cl,testvalslist,RunForecastMethods)
+Results2 <- parLapply(cl,testvalslist,RunForecastMethods)
 
 stopCluster(cl)
 
 
-resultsdf <- purrr::reduce(Results,bind_rows)
+resultsdf2 <- purrr::reduce(Results2,bind_rows)

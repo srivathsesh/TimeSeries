@@ -69,7 +69,7 @@ tsdata <- ArrangeData(store_ids = shop_id,item_ids = itm_id)
  
   # linear regression fit
   tryCatch(expr = {
-    lm.fit <- tslm(Sales ~ Price,data = tsdata, singular.ok = T)
+    lm.fit <- tslm(Sales ~ date_block_num + lag(Sales,1) + category_id,data = tsdata, singular.ok = T)
     lmfct <- forecast(lm.fit,h = 1,newdata = meanf(tsdata[,"Price"], h = 1)$mean)
     fdf <- rbind(fdf,data.frame(item_id = itm_id, 
                                 shop_id = shop_id,
