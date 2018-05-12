@@ -191,9 +191,10 @@ SuperCategory <- function(string) {
 
 ArrangeData <- function(data = MonthlySales.ItemShop, CategorySuperlative = NULL, 
                         item_category_id = NULL, CategoryDesc = NULL,store_ids = NULL, 
-                        item_ids = NULL,response = NULL, aggCriteria = NULL, ...){
+                        item_ids = NULL,response = NULL, aggCriteria = NULL,Collapse = T,...){
   opts <- list(...) # How can we use High level Category filters?
-   browser()
+   #
+  browser()
   # Get Item.Shops for aggregation
   if(!is.null(aggCriteria)){
      
@@ -244,7 +245,7 @@ ArrangeData <- function(data = MonthlySales.ItemShop, CategorySuperlative = NULL
     data %<>% dplyr::filter(item_id %in% !!item_ids)
   }
   if(!is.null(store_ids)){
-    data %<>% dplyr::filter(store_id %in% !!store_ids)
+    data %<>% dplyr::filter(shop_id %in% !!store_ids)
   }
   
   # Aggregation
@@ -309,19 +310,40 @@ if(!is.null(aggCriteria)){
   if(locFlag){
     if(nrow(Predictors) > 0){
       Predictors %<>% dplyr::group_by(date_block_num,item_id,city) %>% 
-        dplyr::summarise(MonthlyCts = sum(MonthlyCts,na.rm = T),Price = mean(Price,na.rm = T)) %>% 
-        dplyr::mutate(Item.City = paste0(as.character(item_id),"_",city)) %>% 
+        dplyr::summarise(MonthlyCts = sum(MonthlyCts,na.rm = T),Price = mean(Price,na.rm = T))
+      if(!Collapse){
+        Predictors %<>% dplyr::mutate(Item.City = paste0(as.character(item_id),"_",city)) %>% 
         tidyr::gather(variable,value, -c(date_block_num,Item.City)) %>% 
         tidyr::unite(temp,Item.City,variable) %>%
-        tidyr::spread(temp,value)
+        tidyr::spread(temp,value) 
+      } else {
+        Predictors %<>%  dplyr::left_join(.,ItemsReference[,c("item_id","Category")]) %>% 
+          dplyr::group_by(date_block_num,Category,city) %>% 
+          dplyr::summarise(MonthlyCts = sum(MonthlyCts,na.rm = T), Price = mean(Price, na.rm = T)) %>% 
+          tidyr::unite(catCity,Category,city) %>% 
+          tidyr::gather(variable,value, -c(date_block_num,catCity)) %>% 
+          tidyr::unite(temp,catCity,variable) %>%
+          tidyr::spread(temp,value)
+      }
+        
       
     } else {
       Predictors <- data %>% dplyr::group_by(date_block_num,item_id,city) %>% 
-        dplyr::summarise(MonthlyCts = sum(MonthlyCts,na.rm = T),Price = mean(Price,na.rm = T)) %>% 
+        dplyr::summarise(MonthlyCts = sum(MonthlyCts,na.rm = T),Price = mean(Price,na.rm = T))
+      if(!Collapse){
         dplyr::mutate(Item.City = paste0(as.character(item_id),"_",city)) %>% 
         tidyr::gather(variable,value, -c(date_block_num,Item.City)) %>% 
         tidyr::unite(temp,Item.City,variable) %>%
         tidyr::spread(temp,value)
+      } else {
+        Predictors %<>%  dplyr::left_join(.,ItemsReference[,c("item_id","Category")]) %>% 
+          dplyr::group_by(date_block_num,Category,city) %>% 
+          dplyr::summarise(MonthlyCts = sum(MonthlyCts,na.rm = T), Price = mean(Price, na.rm = T)) %>% 
+          tidyr::unite(catCity,Category,city) %>% 
+          tidyr::gather(variable,value, -c(date_block_num,catCity)) %>% 
+          tidyr::unite(temp,catCity,variable) %>%
+          tidyr::spread(temp,value)
+      }
     }
     
     
@@ -334,7 +356,9 @@ if(!is.null(aggCriteria)){
       tidyr::spread(temp,value)
   }
   
-  browser()
+  #browser()
+  
+  ArrangedData <- Response %>% dplyr::left_join(Predictors)
     
 } else {
   # selection
@@ -343,7 +367,7 @@ if(!is.null(aggCriteria)){
   
   # spread 
   
-  data %<>%
+  ArrangedData <-  data %>% 
 
     tidyr::gather(variable,value, -c(date_block_num,Item.Shop)) %>%
     tidyr::unite(temp,Item.Shop,variable) %>%
@@ -353,18 +377,24 @@ if(!is.null(aggCriteria)){
   
   # 
   # 
-  # ts(data,start = 2013, frequency = 12)
+  ts(ArrangedData,start = 2013, frequency = 12)
   # 
 }
 
+##-------------------------------------------
+# Audit test data
+##-------------------------------------------
 
+test %<>%  dplyr::mutate(Item.Shop = item_id + shop_id/100)
+test%<>% dplyr::left_join(Agg_Sales_Category[,c("Item.Shop","Music")])
+test %>% dplyr::mutate(Flag = ifelse(is.na(Cinema),1,0)) %>% dplyr::distinct()
 ```
 
 ## Data exploration by item category
 
 In this section we'll explore the correlation amongst item categories. 
 
-```{r,fig.width=4}
+```{r,fig.height = 4}
 # Correlation plot 
 corrplot::corrplot(cormat,order = "hclust",tl.cex = 0.3)
 library(reshape2)
@@ -491,12 +521,111 @@ Reponses <- colnames(MusicCDtrain)[stringr::str_detect(colnames(MusicCDtrain), a
 
 ```
 
-# Linear Regerssion Modeling 
+# Linear Regerssion Modeling for Cinema
 
 ```{r}
+Shop31_Cinema <- ArrangeData(CategorySuperlative = c("Cinema","Music"),
+                             response = list(shop_ids = 31, category_id = 40),
+                             aggCriteria = list(location = T))
 
+Shop31_Cinema <- as.data.frame(Shop31_Cinema)
+
+# remove MOscow Cinema from the predictors
+
+library(stringr)
+requiredcols <- colnames(Shop31_Cinema)[!str_detect(colnames(Shop31_Cinema),"Cinema.*Moscow.*")]
+requiredcols <- union(requiredcols[1:3], requiredcols[!str_detect(requiredcols, ".*Price")])
+
+colcategories <- stringr::str_split(requiredcols,"_")
+MOvieMusicCategories <- sapply(colcategories, `[[`,1)
+Cities <- sapply(colcategories, `[[`,2)
+colsdf <- data.frame(MovieMusicCategories = MOvieMusicCategories,
+                     Cities = Cities) %>% dplyr::mutate(ID = 1:nrow(.))
+str(colsdf)
+MovieMusicCats <- colsdf %>% dplyr::select(MovieMusicCategories) %>% dplyr::distinct(.)
+
+Shop31_Cinema <- Shop31_Cinema %>% dplyr::select(!!requiredcols)
+str(Shop31_Cinema)
+shop31 <- Shop31_Cinema %>% 
+  tidyr::gather(variable,value,-c(date_block_num)) %>% 
+  dplyr::mutate(Cities = sapply(str_split(variable,"_"),`[[`,2)) %>% 
+  dplyr::filter(!Cities %in% c("MonthlyCts", "Price")) %>% 
+  dplyr::mutate(Cat = sapply(str_split(variable,"_"),`[[`,1))
+
+  shop31rev <- shop31 %>% tidyr::separate(Cat,c("Main", "Sub"), sep = "-") %>% 
+                dplyr::group_by(date_block_num,Main,Cities) %>% 
+                dplyr::summarise(MonthlyCts = sum(value)) %>% 
+                tidyr::unite(col = "Main.Cities",c(Main,Cities)) %>% 
+                tidyr::spread(Main.Cities,MonthlyCts)
+  
+  
+Shop31_Cinema_Trans <- Shop31_Cinema %>% select(1:3) %>% 
+                        dplyr::left_join(.,shop31rev) 
+
+colnames(Shop31_Cinema_Trans) <- make.names(colnames(Shop31_Cinema_Trans))
+
+Shop31.40 <- Shop31_Cinema_Trans %>% select(-1) %>% 
+                                      select(everything(),-contains("Payment"))%>% cor(.)
+
+corrplot::corrplot(Shop31.40,tl.cex = 0.6,order = 'hclust')
+
+
+Shop31.40[2,]
 
 ```
 
+
+
+```{r,fig.height=4}
+Shop31_Cinema_Trans %<>% select(everything(),-contains("Payment"))
+
+Shop31_Cinema_TS <- ts(Shop31_Cinema_Trans,start = 2013, frequency = 12)
+
+Shop31_Cinema_Trans[,2:6] %>% ts(.,start = 2013, frequency = 12) %>% autoplot(.,facet = T)
+
+colnames(Shop31_Cinema_TS) <- make.names(colnames(Shop31_Cinema_TS))
+
+fit.lm <- tslm(X40.31_MonthlyCts ~ Cinema._Balashiha + Cinema._Kaluga + Cinema._Kazan + Cinema._Khimki + Cinema._Kolomna + Cinema._Kursk + Cinema._N..Novgorod + Cinema._Novosibirsk + Cinema._Omsk + Cinema._Samara + Cinema._Sergiev + Cinema._St..Petersburg + Cinema._Tyumen + Cinema._Ufa + Cinema._Voronezh + Cinema._Yakutsk + Cinema._Yaroslavl + Music._Khimki + Music._Moscow + Music._Samara + Music._Voronezh + Music._Yakutsk,
+               data = Shop31_Cinema_TS)
+
+summary(fit.lm)
+
+
+Shop31_cat40.lm <- tslm(X40.31_MonthlyCts ~  Cinema._Kaluga + Cinema._Khimki +  Cinema._Samara + Music._Khimki + Music._Moscow ,
+               data = Shop31_Cinema_TS)
+
+summary(Shop31_cat40.lm)
+
+checkresiduals(Shop31_cat40.lm)
+
+Shop31_cat40.stats <- broom::augment(Shop31_cat40.lm)
+
+Shop31_cat40.stats %>% ggplot(aes(x = .fitted, y = .resid)) + geom_point()
+
+Shop31_cat40.stats %>% lattice::xyplot(.resid ~ Cinema._Kaluga + Cinema._Khimki +  Cinema._Samara + Music._Khimki + Music._Moscow, .)
+```
+```{r}
+car::vif(Shop31_cat40.lm)
+ccf(Shop31_Cinema_TS[,"X40.31_MonthlyCts"],Shop31_Cinema_TS[,"Cinema._Khimki"])
+
+Shop31_cat40.laglm <- tslm(X40.31_MonthlyCts ~  stats::lag(Cinema._Kaluga,-1) + stats::lag(Cinema._Khimki,-1) +  stats::lag(Cinema._Samara,-1) + stats::lag(Music._Moscow,-1) +  stats::lag(Music._Khimki,-1) ,
+               data = Shop31_Cinema_TS)
+summary(Shop31_cat40.laglm)
+
+car::vif(Shop31_cat40.laglm)
+
+Shop31_cat40.lm.arima <- auto.arima(Shop31_Cinema_TS[, "X40.31_MonthlyCts"],xreg = stats::lag(Shop31_Cinema_TS[,c("Cinema._Kaluga","Cinema._Khimki","Cinema._Samara","Music._Moscow","Music._Khimki")]))
+
+summary(Shop31_cat40.lm.arima)
+checkresiduals(Shop31_cat40.lm.arima)
+
+```
+
+
+# Data set up for Cinema into a hierarchical model
+
+```{r}
+CinemaHM <- ArrangeData(CategorySuperlative = c("Cinema, Music"))
+```
 
 
